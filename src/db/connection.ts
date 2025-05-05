@@ -1,22 +1,19 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
-import dotenv from "dotenv";
 import { log, error as logError } from "../utils/logger";
 import { Database } from "./models/database";
+import config from "../../config"; // Обновленный импорт
 
-// Загружаем переменные окружения
-dotenv.config();
-
-// Создаем пул подключений к PostgreSQL
+// Создаем пул подключений к PostgreSQL используя настройки из config
 const pool = new Pool({
-  host: process.env.DB_HOST,
-  port: parseInt(process.env.DB_PORT || "5432"),
-  user: process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-  database: process.env.DB_NAME,
-  max: 20, // максимальное количество клиентов в пуле
-  idleTimeoutMillis: 30000, // сколько времени клиент может быть неактивным до закрытия
-  connectionTimeoutMillis: 2000, // таймаут подключения
+  host: config.database.host,
+  port: config.database.port,
+  user: config.database.user,
+  password: config.database.password,
+  database: config.database.name,
+  max: config.database.pool.max,
+  idleTimeoutMillis: config.database.pool.idleTimeout,
+  connectionTimeoutMillis: config.database.pool.connectionTimeout,
 });
 
 // Обработка ошибок пула

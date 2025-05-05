@@ -1,8 +1,6 @@
 import { chatRepository, playerRepository } from "../../db";
 import { ChatMessage, ChatMessageType } from "../../db/models/chatMessage";
-
-// Максимальное количество хранимых сообщений
-const MAX_CHAT_HISTORY = 100;
+import config from "../../../config"; // Добавляем импорт
 
 // Регулярные выражения для фильтрации сообщений
 const PROHIBITED_PATTERNS = [
@@ -68,7 +66,7 @@ export async function getChatHistory(limit: number = 50, before?: number): Promi
 
 // Проверка на спам (можно использовать для ограничения частоты сообщений)
 const userLastMessageTime: Record<string, number> = {};
-const SPAM_THRESHOLD = 1000; // 1 секунда между сообщениями
+const SPAM_THRESHOLD = config.chat.messageRateLimit;
 
 export function isSpamming(userId: string): boolean {
   const now = Date.now();

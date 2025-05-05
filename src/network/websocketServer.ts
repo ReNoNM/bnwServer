@@ -1,16 +1,16 @@
 import WebSocket from "ws";
-import config from "../../config";
+import config from "../../config"; // Обновленный импорт
 import { handleMessage, addClient, startHeartbeat } from "./socketHandler";
 import { log, error as logError } from "../utils/logger";
 import { registerAllHandlers } from "./routes";
-//вместо вебсокета https://github.com/uNetworking/uWebSockets.js для валидации ArkType 
+
 export function startServer(): void {
   try {
-    const port = Number(config.port);
+    const port = config.server.port;
 
     // Проверка корректности порта
     if (isNaN(port) || port <= 0 || port > 65535) {
-      throw new Error(`Некорректный порт: ${config.port}`);
+      throw new Error(`Некорректный порт: ${config.server.port}`);
     }
 
     // Регистрируем обработчики всех маршрутов
@@ -50,7 +50,7 @@ export function startServer(): void {
         log(`Новое соединение: ${ip} (${userAgent})`);
 
         // Устанавливаем максимальный размер сообщения
-        (ws as any).maxPayload = 1024 * 1024; // 1MB
+        (ws as any).maxPayload = config.server.maxPayloadSize;
 
         // Регистрируем клиента
         addClient(ws);

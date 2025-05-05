@@ -1,321 +1,349 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Action-Based WebSocket Test Client</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            max-width: 800px; 
-            margin: 0 auto; 
-            padding: 20px;
-        }
-        #messages {
-            height: 300px;
-            border: 1px solid #ccc;
-            overflow-y: scroll;
-            margin-bottom: 10px;
-            padding: 10px;
-        }
-        .message {
-            margin-bottom: 5px;
-            padding: 5px;
-            border-bottom: 1px solid #eee;
-        }
-        .system { color: red; }
-        .sent { color: blue; }
-        .received { color: green; }
-        input, button { padding: 8px; margin-right: 5px; }
-        input[type="text"] { width: 70%; }
-        .panel {
-            margin-bottom: 20px;
-            padding: 15px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            background-color: #f9f9f9;
-        }
-        .status {
-            padding: 5px 10px;
-            border-radius: 3px;
-            font-weight: bold;
-        }
-        .connected { background-color: #d4edda; color: #155724; }
-        .disconnected { background-color: #f8d7da; color: #721c24; }
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      #messages {
+        height: 300px;
+        border: 1px solid #ccc;
+        overflow-y: scroll;
+        margin-bottom: 10px;
+        padding: 10px;
+      }
+      .message {
+        margin-bottom: 5px;
+        padding: 5px;
+        border-bottom: 1px solid #eee;
+      }
+      .system {
+        color: red;
+      }
+      .sent {
+        color: blue;
+      }
+      .received {
+        color: green;
+      }
+      input,
+      button {
+        padding: 8px;
+        margin-right: 5px;
+      }
+      input[type="text"] {
+        width: 70%;
+      }
+      .panel {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+      }
+      .status {
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-weight: bold;
+      }
+      .connected {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .disconnected {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
     </style>
-</head>
-<body>
+  </head>
+  <body>
     <h1>Action-Based WebSocket Test Client</h1>
-    
+
     <div class="panel">
-        <h2>Connection</h2>
-        <div>
-            <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="WebSocket URL">
-            <button id="connectBtn">Connect</button>
-            <button id="disconnectBtn" disabled>Disconnect</button>
-            <span id="status" class="status disconnected">Disconnected</span>
-        </div>
+      <h2>Connection</h2>
+      <div>
+        <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="WebSocket URL" />
+        <button id="connectBtn">Connect</button>
+        <button id="disconnectBtn" disabled>Disconnect</button>
+        <span id="status" class="status disconnected">Disconnected</span>
+      </div>
     </div>
-    
+
     <div class="panel">
-        <h2>Authentication</h2>
-        <div>
-            <input type="text" id="username" placeholder="Username">
-            <input type="password" id="password" placeholder="Password">
-            <button id="registerBtn" disabled>Register</button>
-            <button id="loginBtn" disabled>Login</button>
-        </div>
-        <div id="authStatus" style="margin-top: 10px;"></div>
+      <h2>Authentication</h2>
+      <div>
+        <input type="text" id="username" placeholder="Username" value="admin" />
+        <input type="password" id="password" placeholder="Password" value="12345678" />
+        <button id="registerBtn" disabled>Register</button>
+        <button id="loginBtn" disabled>Login</button>
+      </div>
+      <div id="authStatus" style="margin-top: 10px"></div>
     </div>
-    
+
     <div class="panel">
-        <h2>Chat</h2>
-        <div id="messages"></div>
-        <div>
-            <input type="text" id="messageInput" placeholder="Type a message..." disabled>
-            <button id="sendBtn" disabled>Send</button>
-            <button id="historyBtn" disabled>Get History</button>
-        </div>
+      <h2>Chat</h2>
+      <div id="messages"></div>
+      <div>
+        <input type="text" id="messageInput" placeholder="Type a message..." disabled />
+        <button id="sendBtn" disabled>Send</button>
+        <button id="historyBtn" disabled>Get History</button>
+      </div>
     </div>
-    
+
     <script>
-        let socket = null;
-        let currentPlayer = null;
-        let token = null;
-        
-        // DOM элементы
-        const connectBtn = document.getElementById('connectBtn');
-        const disconnectBtn = document.getElementById('disconnectBtn');
-        const serverUrlInput = document.getElementById('serverUrl');
-        const statusSpan = document.getElementById('status');
-        const messagesDiv = document.getElementById('messages');
-        const messageInput = document.getElementById('messageInput');
-        const sendBtn = document.getElementById('sendBtn');
-        const historyBtn = document.getElementById('historyBtn');
-        const usernameInput = document.getElementById('username');
-        const passwordInput = document.getElementById('password');
-        const registerBtn = document.getElementById('registerBtn');
-        const loginBtn = document.getElementById('loginBtn');
-        const authStatusDiv = document.getElementById('authStatus');
-        
-        // Функция для добавления сообщения в лог
-        function addMessage(text, type) {
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${type}`;
-            messageDiv.innerText = text;
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-        
-        // Подключение к серверу
-        connectBtn.addEventListener('click', () => {
-            const url = serverUrlInput.value;
+      let socket = null;
+      let currentPlayer = null;
+      let token = null;
+
+      // DOM элементы
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const serverUrlInput = document.getElementById("serverUrl");
+      const statusSpan = document.getElementById("status");
+      const messagesDiv = document.getElementById("messages");
+      const messageInput = document.getElementById("messageInput");
+      const sendBtn = document.getElementById("sendBtn");
+      const historyBtn = document.getElementById("historyBtn");
+      const usernameInput = document.getElementById("username");
+      const passwordInput = document.getElementById("password");
+      const registerBtn = document.getElementById("registerBtn");
+      const loginBtn = document.getElementById("loginBtn");
+      const authStatusDiv = document.getElementById("authStatus");
+
+      // Функция для добавления сообщения в лог
+      function addMessage(text, type) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerText = text;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      // Подключение к серверу
+      connectBtn.addEventListener("click", () => {
+        const url = serverUrlInput.value;
+        try {
+          socket = new WebSocket(url);
+
+          socket.onopen = () => {
+            addMessage("Connected to server", "system");
+            statusSpan.innerText = "Connected";
+            statusSpan.className = "status connected";
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            registerBtn.disabled = false;
+            loginBtn.disabled = false;
+          };
+
+          socket.onclose = () => {
+            addMessage("Disconnected from server", "system");
+            statusSpan.innerText = "Disconnected";
+            statusSpan.className = "status disconnected";
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            registerBtn.disabled = true;
+            loginBtn.disabled = true;
+            historyBtn.disabled = true;
+            messageInput.disabled = true;
+            sendBtn.disabled = true;
+            currentPlayer = null;
+          };
+
+          socket.onerror = (error) => {
+            addMessage(`Error: ${error.message}`, "system");
+          };
+
+          socket.onmessage = (event) => {
             try {
-                socket = new WebSocket(url);
-                
-                socket.onopen = () => {
-                    addMessage('Connected to server', 'system');
-                    statusSpan.innerText = 'Connected';
-                    statusSpan.className = 'status connected';
-                    connectBtn.disabled = true;
-                    disconnectBtn.disabled = false;
-                    registerBtn.disabled = false;
-                    loginBtn.disabled = false;
-                };
-                
-                socket.onclose = () => {
-                    addMessage('Disconnected from server', 'system');
-                    statusSpan.innerText = 'Disconnected';
-                    statusSpan.className = 'status disconnected';
-                    connectBtn.disabled = false;
-                    disconnectBtn.disabled = true;
-                    registerBtn.disabled = true;
-                    loginBtn.disabled = true;
-                    historyBtn.disabled = true;
-                    messageInput.disabled = true;
-                    sendBtn.disabled = true;
-                    currentPlayer = null;
-                };
-                
-                socket.onerror = (error) => {
-                    addMessage(`Error: ${error.message}`, 'system');
-                };
-                
-                socket.onmessage = (event) => {
-                    try {
-                        const message = JSON.parse(event.data);
-                        
-                        // Обработка различных типов сообщений
-                        switch (message.action) {
-                            case 'system/connect':
-                                addMessage(`Server: ${message.data.message}`, 'system');
-                                break;
-                                
-                            case 'system/ping':
-                                socket.send(JSON.stringify({ 
-                                    action: 'system/pong',
-                                    data: { timestamp: Date.now() } 
-                                }));
-                                break;
-                                
-                            case 'auth/registerSuccess':
-                                addMessage('Registration successful', 'system');
-                                currentPlayer = message.data.player;
-                                token = message.data.token;
-                                authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
-                                messageInput.disabled = false;
-                                sendBtn.disabled = false;
-                                historyBtn.disabled = false;
-                                break;
-                                
-                            case 'auth/registerFailed':
-                                addMessage(`Registration failed: ${message.data.error}`, 'system');
-                                break;
-                                
-                            case 'auth/loginSuccess':
-                                addMessage('Login successful', 'system');
-                                currentPlayer = message.data.player;
-                                token = message.data.token;
-                                authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
-                                messageInput.disabled = false;
-                                sendBtn.disabled = false;
-                                historyBtn.disabled = false;
-                                break;
-                                
-                            case 'auth/loginFailed':
-                                addMessage(`Login failed: ${message.data.error}`, 'system');
-                                break;
-                                
-                            case 'chat/newMessage':
-                                const chatMessage = message.data.message;
-                                const sender = chatMessage.username || chatMessage.senderId;
-                                const isOwnMessage = currentPlayer && chatMessage.senderId === currentPlayer.id;
-                                const msgClass = isOwnMessage ? 'sent' : 'received';
-                                addMessage(`${sender}: ${chatMessage.message}`, msgClass);
-                                break;
-                                
-                            case 'chat/sendSuccess':
-                                // Опционально: можно показать статус отправки
-                                break;
-                                
-                            case 'chat/sendFailed':
-                                addMessage(`Failed to send message: ${message.data.error}`, 'system');
-                                break;
-                                
-                            case 'chat/history':
-                                // Сначала очищаем историю
-                                messagesDiv.innerHTML = '';
-                                addMessage('Chat history:', 'system');
-                                
-                                // Затем добавляем все сообщения из истории
-                                message.data.messages.forEach(msg => {
-                                    const sender = msg.metadata?.username || msg.senderId;
-                                    const isOwnMessage = currentPlayer && msg.senderId === currentPlayer.id;
-                                    const msgClass = isOwnMessage ? 'sent' : 'received';
-                                    addMessage(`${sender}: ${msg.message}`, msgClass);
-                                });
-                                break;
-                                
-                            case 'system/error':
-                                addMessage(`Error: ${message.data.error}`, 'system');
-                                break;
-                                
-                            default:
-                                addMessage(`Received: ${JSON.stringify(message)}`, 'received');
-                        }
-                    } catch (e) {
-                        addMessage(`Failed to parse message: ${event.data}`, 'system');
-                    }
-                };
-            } catch (error) {
-                addMessage(`Connection failed: ${error.message}`, 'system');
+              const message = JSON.parse(event.data);
+
+              // Обработка различных типов сообщений
+              switch (message.action) {
+                case "system/connect":
+                  addMessage(`Server: ${message.data.message}`, "system");
+                  break;
+
+                case "system/ping":
+                  socket.send(
+                    JSON.stringify({
+                      action: "system/pong",
+                      data: { timestamp: Date.now() },
+                    })
+                  );
+                  break;
+
+                case "auth/registerSuccess":
+                  addMessage("Registration successful", "system");
+                  currentPlayer = message.data.player;
+                  token = message.data.token;
+                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
+                  messageInput.disabled = false;
+                  sendBtn.disabled = false;
+                  historyBtn.disabled = false;
+                  break;
+
+                case "auth/registerFailed":
+                  addMessage(`Registration failed: ${message.data.error}`, "system");
+                  break;
+
+                case "auth/loginSuccess":
+                  addMessage("Login successful", "system");
+                  currentPlayer = message.data.player;
+                  token = message.data.token;
+                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
+                  messageInput.disabled = false;
+                  sendBtn.disabled = false;
+                  historyBtn.disabled = false;
+                  break;
+
+                case "auth/loginFailed":
+                  addMessage(`Login failed: ${message.data.error}`, "system");
+                  break;
+
+                case "chat/newMessage":
+                  const chatMessage = message.data.message;
+                  const sender = chatMessage.username || chatMessage.senderId;
+                  const isOwnMessage = currentPlayer && chatMessage.senderId === currentPlayer.id;
+                  const msgClass = isOwnMessage ? "sent" : "received";
+                  addMessage(`${sender}: ${chatMessage.message}`, msgClass);
+                  break;
+
+                case "chat/sendSuccess":
+                  // Опционально: можно показать статус отправки
+                  break;
+
+                case "chat/sendFailed":
+                  addMessage(`Failed to send message: ${message.data.error}`, "system");
+                  break;
+
+                case "chat/history":
+                  // Сначала очищаем историю
+                  messagesDiv.innerHTML = "";
+                  addMessage("Chat history:", "system");
+
+                  // Затем добавляем все сообщения из истории
+                  message.data.messages.forEach((msg) => {
+                    const sender = msg.metadata?.username || msg.senderId;
+                    const isOwnMessage = currentPlayer && msg.senderId === currentPlayer.id;
+                    const msgClass = isOwnMessage ? "sent" : "received";
+                    addMessage(`${sender}: ${msg.message}`, msgClass);
+                  });
+                  break;
+
+                case "system/error":
+                  addMessage(`Error: ${message.data.error}`, "system");
+                  break;
+
+                default:
+                  addMessage(`Received: ${JSON.stringify(message)}`, "received");
+              }
+            } catch (e) {
+              addMessage(`Failed to parse message: ${event.data}`, "system");
             }
-        });
-        
-        // Отключение от сервера
-        disconnectBtn.addEventListener('click', () => {
-            if (socket) {
-                socket.close();
-            }
-        });
-        
-        // Регистрация пользователя
-        registerBtn.addEventListener('click', () => {
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
-            
-            if (!username || !password) {
-                addMessage('Username and password are required', 'system');
-                return;
-            }
-            
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    action: 'auth/register',
-                    data: { username, password }
-                }));
-            } else {
-                addMessage('Not connected to server', 'system');
-            }
-        });
-        
-        // Вход пользователя
-        loginBtn.addEventListener('click', () => {
-            const username = usernameInput.value.trim();
-            const password = passwordInput.value.trim();
-            
-            if (!username || !password) {
-                addMessage('Username and password are required', 'system');
-                return;
-            }
-            
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    action: 'auth/login',
-                    data: { username, password }
-                }));
-            } else {
-                addMessage('Not connected to server', 'system');
-            }
-        });
-        
-        // Отправка сообщения
-        sendBtn.addEventListener('click', () => {
-            const message = messageInput.value.trim();
-            
-            if (!message) {
-                return;
-            }
-            
-            if (socket && socket.readyState === WebSocket.OPEN && currentPlayer) {
-                socket.send(JSON.stringify({
-                    action: 'chat/sendMessage',
-                    data: { message }
-                }));
-                messageInput.value = '';
-            } else {
-                addMessage('Not connected or not authenticated', 'system');
-            }
-        });
-        
-        // Получение истории чата
-        historyBtn.addEventListener('click', () => {
-            if (socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    action: 'chat/getHistory',
-                    data: { limit: 50 }
-                }));
-            } else {
-                addMessage('Not connected to server', 'system');
-            }
-        });
-        
-        // Отправка сообщения по нажатию Enter
-        messageInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                sendBtn.click();
-            }
-        });
+          };
+        } catch (error) {
+          addMessage(`Connection failed: ${error.message}`, "system");
+        }
+      });
+
+      // Отключение от сервера
+      disconnectBtn.addEventListener("click", () => {
+        if (socket) {
+          socket.close();
+        }
+      });
+
+      // Регистрация пользователя
+      registerBtn.addEventListener("click", () => {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+          addMessage("Username and password are required", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "auth/register",
+              data: { username, password },
+            })
+          );
+        } else {
+          addMessage("Not connected to server", "system");
+        }
+      });
+
+      // Вход пользователя
+      loginBtn.addEventListener("click", () => {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!username || !password) {
+          addMessage("Username and password are required", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "auth/login",
+              data: { username, password },
+            })
+          );
+        } else {
+          addMessage("Not connected to server", "system");
+        }
+      });
+
+      // Отправка сообщения
+      sendBtn.addEventListener("click", () => {
+        const message = messageInput.value.trim();
+
+        if (!message) {
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN && currentPlayer) {
+          socket.send(
+            JSON.stringify({
+              action: "chat/sendMessage",
+              data: { message },
+            })
+          );
+          messageInput.value = "";
+        } else {
+          addMessage("Not connected or not authenticated", "system");
+        }
+      });
+
+      // Получение истории чата
+      historyBtn.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "chat/getHistory",
+              data: { limit: 50 },
+            })
+          );
+        } else {
+          addMessage("Not connected to server", "system");
+        }
+      });
+
+      // Отправка сообщения по нажатию Enter
+      messageInput.addEventListener("keypress", (e) => {
+        if (e.key === "Enter") {
+          sendBtn.click();
+        }
+      });
     </script>
-</body>
+  </body>
 </html>

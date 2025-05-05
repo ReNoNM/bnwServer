@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { dispatchMessage } from "./messageDispatcher";
 import { log, error as logError } from "../utils/logger";
 import { removeOnlinePlayer } from "../game/stateManager";
+import config from "../../config"; // Добавляем импорт
 
 // Отслеживание клиентских соединений
 interface ClientInfo {
@@ -13,7 +14,7 @@ interface ClientInfo {
 }
 
 const clients: ClientInfo[] = [];
-const HEARTBEAT_INTERVAL = 30000; // 30 секунд
+const HEARTBEAT_INTERVAL = config.server.heartbeatInterval;
 
 export function handleMessage(ws: WebSocket, data: string): void {
   // Делегируем обработку сообщения диспетчеру

@@ -1,3 +1,4 @@
+import config from "../../config";
 // Уровни логирования
 export enum LogLevel {
   DEBUG = 0,
@@ -6,13 +7,27 @@ export enum LogLevel {
   ERROR = 3,
 }
 
+function getLevelValue(level: string): LogLevel {
+  switch (level.toUpperCase()) {
+    case "DEBUG":
+      return LogLevel.DEBUG;
+    case "INFO":
+      return LogLevel.INFO;
+    case "WARN":
+      return LogLevel.WARN;
+    case "ERROR":
+      return LogLevel.ERROR;
+    default:
+      return LogLevel.INFO;
+  }
+}
+
 // Настройка логгера
 const logConfig = {
-  level: process.env.NODE_ENV === "production" ? LogLevel.INFO : LogLevel.DEBUG,
-  includeTimestamp: true,
-  colorize: process.env.NODE_ENV !== "production",
+  level: getLevelValue(config.logging.level),
+  includeTimestamp: config.logging.includeTimestamp,
+  colorize: config.logging.colorize,
 };
-
 // Цвета для консоли
 const colors = {
   reset: "\x1b[0m",
