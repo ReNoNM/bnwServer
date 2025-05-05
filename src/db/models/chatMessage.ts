@@ -1,3 +1,5 @@
+import { Generated } from "kysely";
+
 export enum ChatMessageType {
   REGULAR = "REGULAR",
   SYSTEM = "SYSTEM",
@@ -9,11 +11,12 @@ export interface ChatMessage {
   message: string;
   timestamp: number;
   type: ChatMessageType;
-  receiverId?: string; // Для приватных сообщений
+  receiverId?: string | null; // Изменим тип на string | null | undefined для совместимости с БД
   metadata?: {
-    username?: string; // Имя отправителя для удобства клиента
-    color?: string; // Цвет сообщения
-    read?: boolean; // Прочитано ли сообщение (для приватных)
+    username?: string;
+    color?: string;
+    read?: boolean;
+    [key: string]: any; // Добавим индексную сигнатуру для других полей
   };
 }
 
@@ -46,7 +49,7 @@ export function createSystemMessage(message: string): ChatMessage {
 
 // Добавляем интерфейс для таблицы chat_messages в БД (для Kysely)
 export interface ChatMessageTable {
-  id: string;
+  id: Generated<string>;
   sender_id: string;
   message: string;
   timestamp: bigint;

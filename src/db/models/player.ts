@@ -1,3 +1,5 @@
+import { Generated } from "kysely";
+
 // Существующий интерфейс для объекта в приложении
 export interface Player {
   id: string;
@@ -35,10 +37,10 @@ export function playerToDTO(player: Player): PlayerDTO {
 
 // Определяем интерфейс для таблицы players в БД (для Kysely)
 export interface PlayerTable {
-  id: string;
+  id: Generated<string>;
   username: string;
   password: string;
-  created_at: Date;
+  created_at: Generated<Date>;
   last_login: Date | null;
   status: "online" | "offline";
   settings: Record<string, unknown>;

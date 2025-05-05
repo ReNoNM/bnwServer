@@ -32,7 +32,7 @@ export async function getAll(): Promise<ChatMessage[]> {
         type: row.type as ChatMessageType,
         receiverId: row.receiverId,
         metadata: metadata,
-      };
+      } as ChatMessage;
     });
   } catch (err) {
     logError(`Ошибка получения сообщений чата: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
@@ -65,7 +65,7 @@ export async function add(message: ChatMessage): Promise<ChatMessage | undefined
       type: result.type as ChatMessageType,
       receiverId: result.receiverId,
       metadata: result.metadata as Record<string, any>,
-    };
+    } as ChatMessage;
   } catch (err) {
     logError(`Ошибка добавления сообщения чата: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return undefined;
@@ -92,7 +92,7 @@ export async function getRecent(limit: number = 50): Promise<ChatMessage[]> {
       .limit(limit)
       .execute();
 
-    // Сортируем в порядке возрастания времени
+    // Преобразуем и сортируем в хронологическом порядке
     return results
       .map((row) => {
         const metadata = (row.metadata as Record<string, any>) || {};
@@ -105,9 +105,9 @@ export async function getRecent(limit: number = 50): Promise<ChatMessage[]> {
           type: row.type as ChatMessageType,
           receiverId: row.receiverId,
           metadata: metadata,
-        };
+        } as ChatMessage;
       })
-      .reverse(); // Возвращаем в хронологическом порядке
+      .reverse();
   } catch (err) {
     logError(`Ошибка получения последних сообщений: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return [];
@@ -153,9 +153,9 @@ export async function getPrivate(user1Id: string, user2Id: string, limit: number
           type: row.type as ChatMessageType,
           receiverId: row.receiverId,
           metadata: metadata,
-        };
+        } as ChatMessage;
       })
-      .reverse(); // Возвращаем в хронологическом порядке
+      .reverse();
   } catch (err) {
     logError(`Ошибка получения приватных сообщений: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return [];
