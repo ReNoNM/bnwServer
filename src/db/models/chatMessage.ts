@@ -11,12 +11,11 @@ export interface ChatMessage {
   message: string;
   timestamp: number;
   type: ChatMessageType;
-  receiverId?: string | null; // Изменим тип на string | null | undefined для совместимости с БД
+  receiverId?: string | null;
   metadata?: {
     username?: string;
     color?: string;
     read?: boolean;
-    [key: string]: any; // Добавим индексную сигнатуру для других полей
   };
 }
 

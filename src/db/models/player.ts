@@ -16,7 +16,6 @@ export interface PlayerSettings {
   language?: string;
   notifications?: boolean;
   theme?: "light" | "dark";
-  [key: string]: unknown; // Добавляем индексную сигнатуру
 }
 
 // DTO для передачи данных клиенту (без пароля)
