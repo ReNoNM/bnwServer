@@ -43,3 +43,14 @@ export function createSystemMessage(message: string): ChatMessage {
     },
   };
 }
+
+// Добавляем интерфейс для таблицы chat_messages в БД (для Kysely)
+export interface ChatMessageTable {
+  id: string;
+  sender_id: string;
+  message: string;
+  timestamp: bigint;
+  type: string;
+  receiver_id: string | null;
+  metadata: Record<string, unknown>;
+}

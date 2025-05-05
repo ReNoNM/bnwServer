@@ -1,8 +1,8 @@
 import { Player } from "../../db/models/player";
-import { addPlayer, getPlayerByUsername } from "../../db";
 import { hashPassword, verifyPassword } from "../../utils/passwordUtils";
 import { generateToken } from "../../utils/tokenUtils";
 import { log } from "../../utils/logger";
+import { playerRepository } from "../../db";
 
 export async function registerPlayer(
   username: string,
@@ -20,7 +20,7 @@ export async function registerPlayer(
     }
 
     // Проверяем, существует ли уже пользователь с таким именем
-    const existingPlayer = await getPlayerByUsername(username);
+    const existingPlayer = await playerRepository.getByUsername(username);
     if (existingPlayer) {
       return { success: false, error: "Пользователь с таким именем уже существует" };
     }
@@ -29,7 +29,7 @@ export async function registerPlayer(
     const hashedPassword = hashPassword(password);
 
     // Создаем нового игрока
-    const newPlayer = await addPlayer({
+    const newPlayer = await playerRepository.add({
       username,
       password: hashedPassword,
       status: "online",
@@ -61,7 +61,7 @@ export async function authenticatePlayer(
 ): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
   try {
     // Ищем пользователя по имени
-    const player = await getPlayerByUsername(username);
+    const player = await playerRepository.getByUsername(username);
 
     if (!player) {
       return { success: false, error: "Неверные учетные данные" };

@@ -1,5 +1,5 @@
+import { chatRepository, playerRepository } from "../../db";
 import { ChatMessage, ChatMessageType } from "../../db/models/chatMessage";
-import { addChatMessage, getRecentChatMessages, getPlayerById } from "../../db";
 
 // Максимальное количество хранимых сообщений
 const MAX_CHAT_HISTORY = 100;
@@ -28,6 +28,12 @@ export async function processChatMessage(senderId: string, message: string, user
   const trimmedMessage = message.length > 500 ? message.substring(0, 500) + "..." : message;
 
   try {
+    // Проверяем существование отправителя
+    const sender = await playerRepository.getById(senderId);
+    if (!sender) {
+      return null;
+    }
+
     // Создаем сообщение
     const chatMsg: ChatMessage = {
       senderId: senderId,
@@ -39,8 +45,8 @@ export async function processChatMessage(senderId: string, message: string, user
       },
     };
 
-    // Добавляем в хранилище
-    const savedMessage = await addChatMessage(chatMsg);
+    // Добавляем в хранилище через репозиторий
+    const savedMessage = await chatRepository.add(chatMsg);
 
     return savedMessage || null;
   } catch (error) {
@@ -51,8 +57,8 @@ export async function processChatMessage(senderId: string, message: string, user
 
 // Получение истории чата с пагинацией
 export async function getChatHistory(limit: number = 50, before?: number): Promise<ChatMessage[]> {
-  // Получаем сообщения из базы данных
-  const messages = await getRecentChatMessages(limit);
+  // Получаем сообщения из базы данных через репозиторий
+  const messages = await chatRepository.getRecent(limit);
 
   // Фильтрация по времени, если указано
   const filteredMessages = before ? messages.filter((msg) => msg.timestamp < before) : messages;
