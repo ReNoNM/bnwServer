@@ -1,5 +1,5 @@
 import { ChatMessage, ChatMessageType } from "../../db/models/chatMessage";
-import { addChatMessage, getChatMessages, getPlayerById } from "../../db";
+import { addChatMessage, getRecentChatMessages, getPlayerById } from "../../db";
 
 // Максимальное количество хранимых сообщений
 const MAX_CHAT_HISTORY = 100;
@@ -11,8 +11,7 @@ const PROHIBITED_PATTERNS = [
 ];
 
 // Обработка сообщения чата
-export function processChatMessage(senderId: string, message: string): ChatMessage | null {
-  console.log(message);
+export async function processChatMessage(senderId: string, message: string, username: string = "Пользователь"): Promise<ChatMessage | null> {
   // Проверка на пустое сообщение
   if (!message || message.trim() === "") {
     return null;
@@ -28,59 +27,37 @@ export function processChatMessage(senderId: string, message: string): ChatMessa
   // Ограничение длины сообщения
   const trimmedMessage = message.length > 500 ? message.substring(0, 500) + "..." : message;
 
-  // Создаем сообщение
-  const chatMsg: ChatMessage = {
-    senderId,
-    message: trimmedMessage,
-    timestamp: Date.now(),
-    type: ChatMessageType.REGULAR,
-  };
+  try {
+    // Создаем сообщение
+    const chatMsg: ChatMessage = {
+      senderId: senderId,
+      message: trimmedMessage,
+      timestamp: Date.now(),
+      type: ChatMessageType.REGULAR,
+      metadata: {
+        username: username,
+      },
+    };
 
-  // Добавляем в хранилище
-  addChatMessage(chatMsg);
+    // Добавляем в хранилище
+    const savedMessage = await addChatMessage(chatMsg);
 
-  // Ограничиваем размер истории чата
-  pruneOldMessages();
-
-  return chatMsg;
+    return savedMessage || null;
+  } catch (error) {
+    console.error("Ошибка при обработке сообщения чата:", error);
+    return null;
+  }
 }
 
 // Получение истории чата с пагинацией
-export function getChatHistory(limit: number = 50, before?: number): ChatMessage[] {
-  const messages = getChatMessages();
+export async function getChatHistory(limit: number = 50, before?: number): Promise<ChatMessage[]> {
+  // Получаем сообщения из базы данных
+  const messages = await getRecentChatMessages(limit);
 
   // Фильтрация по времени, если указано
   const filteredMessages = before ? messages.filter((msg) => msg.timestamp < before) : messages;
 
-  // Получаем последние сообщения с ограничением
-  const recentMessages = filteredMessages.slice(-limit).sort((a, b) => a.timestamp - b.timestamp);
-
-  // Обогащаем сообщения данными пользователей
-  return recentMessages.map((msg) => {
-    // Находим пользователя по ID
-    const player = getPlayerById(msg.senderId);
-
-    // Добавляем имя пользователя в метаданные сообщения
-    return {
-      ...msg,
-      metadata: {
-        ...(msg.metadata || {}),
-        username: player ? player.username : "Неизвестный пользователь",
-      },
-    };
-  });
-}
-
-// Удаление старых сообщений для экономии памяти
-function pruneOldMessages(): void {
-  const messages = getChatMessages();
-  if (messages.length > MAX_CHAT_HISTORY) {
-    // Оставляем только последние MAX_CHAT_HISTORY сообщений
-    const messagesToKeep = messages.slice(-MAX_CHAT_HISTORY);
-    // Очищаем массив и добавляем сообщения, которые хотим сохранить
-    messages.length = 0;
-    messages.push(...messagesToKeep);
-  }
+  return filteredMessages;
 }
 
 // Проверка на спам (можно использовать для ограничения частоты сообщений)

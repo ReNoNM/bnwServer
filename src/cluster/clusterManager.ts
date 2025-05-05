@@ -2,10 +2,11 @@ import cluster from "cluster";
 import os from "os";
 import { startServer } from "../network/websocketServer";
 import { log, error as logError } from "../utils/logger";
+import { initializeDatabase } from "../db"; // Импортируем функцию инициализации базы данных
 
 // Определяем оптимальное количество рабочих процессов
 const determineWorkerCount = (): number => {
-  const cpuCount = os.cpus().length;
+  const cpuCount = 1; //os.cpus().length;
 
   // Используем CPU count - 1, чтобы оставить один поток для ОС
   // Минимум 1 процесс, максимум количество ядер
@@ -77,8 +78,17 @@ export function startCluster(): void {
   } else {
     // Код для worker процесса
     try {
-      startServer();
-      log(`Рабочий процесс ${process.pid} запущен`);
+      // Инициализируем базу данных перед запуском сервера
+      initializeDatabase()
+        .then(() => {
+          // После успешной инициализации запускаем сервер
+          startServer();
+          log(`Рабочий процесс ${process.pid} запущен`);
+        })
+        .catch((err) => {
+          logError(`Ошибка инициализации базы данных: ${err.message}`);
+          process.exit(1);
+        });
 
       // Обработка неперехваченных исключений
       process.on("uncaughtException", (error) => {

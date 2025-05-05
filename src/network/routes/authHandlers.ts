@@ -7,9 +7,10 @@ import { handleError } from "../../utils/errorHandler";
 import { registerHandler } from "../messageDispatcher";
 import { updateClientInfo } from "../socketHandler";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
+import { validateToken } from "../../utils/tokenUtils";
 
 // Обработчик регистрации
-function handleRegister(ws: WebSocket, data: any): void {
+async function handleRegister(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage(registerPayloadSchema, data);
     if (!validation.success) {
@@ -20,7 +21,7 @@ function handleRegister(ws: WebSocket, data: any): void {
     const { username, password } = validation.data;
     log(`Попытка регистрации: ${username}`);
 
-    const result = registerPlayer(username, password);
+    const result = await registerPlayer(username, password);
 
     if (result.success && result.player) {
       // Сохраняем данные о пользователе в объекте соединения
@@ -51,7 +52,7 @@ function handleRegister(ws: WebSocket, data: any): void {
 }
 
 // Обработчик входа
-function handleLogin(ws: WebSocket, data: any): void {
+async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage(loginPayloadSchema, data);
     if (!validation.success) {
@@ -62,7 +63,7 @@ function handleLogin(ws: WebSocket, data: any): void {
     const { username, password } = validation.data;
     log(`Попытка входа: ${username}`);
 
-    const result = authenticatePlayer(username, password);
+    const result = await authenticatePlayer(username, password);
 
     if (result.success && result.player) {
       // Сохраняем данные о пользователе в объекте соединения
@@ -93,18 +94,21 @@ function handleLogin(ws: WebSocket, data: any): void {
 }
 
 // Обработчик аутентификации по токену
-function handleTokenAuth(ws: WebSocket, data: any): void {
+async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
   try {
     if (!data.token) {
       sendError(ws, "auth/token", "Токен не предоставлен");
       return;
     }
 
-    const { authenticateByToken } = require("../messageDispatcher");
-    const result = authenticateByToken(ws, data.token);
+    const result = validateToken(data.token);
 
-    if (result) {
-      // Здесь можно загрузить дополнительные данные о пользователе
+    if (result.valid && result.userId) {
+      // Сохраняем данные о пользователе в объекте соединения
+      (ws as any).playerData = {
+        id: result.userId,
+      };
+
       sendSuccess(ws, "auth/token", {
         message: "Аутентификация по токену успешна",
       });

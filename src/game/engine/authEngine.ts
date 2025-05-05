@@ -1,13 +1,13 @@
 import { Player } from "../../db/models/player";
-import { addPlayer, getPlayers } from "../../db";
+import { addPlayer, getPlayerByUsername } from "../../db";
 import { hashPassword, verifyPassword } from "../../utils/passwordUtils";
 import { generateToken } from "../../utils/tokenUtils";
 import { log } from "../../utils/logger";
 
-export function registerPlayer(
+export async function registerPlayer(
   username: string,
   password: string
-): { success: boolean; player?: Omit<Player, "password">; token?: string; error?: string } {
+): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
   try {
     // Проверяем имя пользователя на корректность
     if (!username || username.length < 3 || username.length > 20) {
@@ -19,23 +19,25 @@ export function registerPlayer(
       return { success: false, error: "Пароль должен содержать минимум 6 символов" };
     }
 
-    const players = getPlayers();
-    if (players.find((p) => p.username.toLowerCase() === username.toLowerCase())) {
+    // Проверяем, существует ли уже пользователь с таким именем
+    const existingPlayer = await getPlayerByUsername(username);
+    if (existingPlayer) {
       return { success: false, error: "Пользователь с таким именем уже существует" };
     }
 
     // Хешируем пароль перед сохранением
     const hashedPassword = hashPassword(password);
 
-    const newPlayer: Player = {
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    // Создаем нового игрока
+    const newPlayer = await addPlayer({
       username,
       password: hashedPassword,
-      createdAt: Date.now(),
       status: "online",
-    };
+    });
 
-    addPlayer(newPlayer);
+    if (!newPlayer) {
+      return { success: false, error: "Ошибка при создании пользователя" };
+    }
 
     // Создаем токен для авторизации
     const token = generateToken(newPlayer.id);
@@ -53,13 +55,13 @@ export function registerPlayer(
   }
 }
 
-export function authenticatePlayer(
+export async function authenticatePlayer(
   username: string,
   password: string
-): { success: boolean; player?: Omit<Player, "password">; token?: string; error?: string } {
+): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
   try {
-    const players = getPlayers();
-    const player = players.find((p) => p.username.toLowerCase() === username.toLowerCase());
+    // Ищем пользователя по имени
+    const player = await getPlayerByUsername(username);
 
     if (!player) {
       return { success: false, error: "Неверные учетные данные" };
