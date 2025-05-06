@@ -108,7 +108,7 @@ export async function completeRegistration(
     }
 
     // Создаем токен для авторизации
-    const token = generateToken(newPlayer.id);
+    const token = await generateToken(newPlayer.id);
 
     // Логируем успешную регистрацию
     log(`Игрок зарегистрирован: ${username} (${newPlayer.id})`);
