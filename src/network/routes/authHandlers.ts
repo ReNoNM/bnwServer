@@ -170,8 +170,7 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   }
 }
 
-// src/network/routes/authHandlers.ts (добавление)
-// Обработчик обновления токена
+// Вот только часть для handleRefreshToken
 async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage<TokenPayload>(tokenPayloadSchema, data);
@@ -185,7 +184,7 @@ async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
     // Если токен истек, но был валидным
     if (!result.valid && result.expired && result.userId) {
       // Создаем новый токен
-      const newToken = generateToken(result.userId);
+      const newToken = await generateToken(result.userId);
 
       // Обновляем данные пользователя
       const player = await playerRepository.getById(result.userId);
@@ -195,7 +194,7 @@ async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
       }
 
       sendSuccess(ws, "auth/refreshToken", {
-        accessToken: newToken, // Изменили имя поля с token на accessToken
+        accessToken: newToken,
         message: "Токен успешно обновлен",
       });
 
@@ -205,7 +204,7 @@ async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
     } else {
       // Токен еще действителен, просто возвращаем его
       sendSuccess(ws, "auth/refreshToken", {
-        accessToken: validation.data.token, // Изменили имя поля с token на accessToken
+        accessToken: validation.data.token,
         message: "Токен еще действителен",
       });
     }

@@ -1,28 +1,23 @@
-import crypto from "crypto";
+// src/utils/tokenUtils.ts
+import jwt from "jsonwebtoken";
 import config from "../../config";
 import * as tokenRepository from "../db/repositories/tokenRepository";
 
-// Генерируем токен и сохраняем его в базе
+// Генерация JWT токена
 export async function generateToken(userId: string, deviceInfo: Record<string, any> = {}): Promise<string> {
-  const randomPart = crypto.randomBytes(24).toString("hex");
   const timestamp = Date.now();
-  const secretKey = config.security.jwtSecret;
-
-  const dataToHash = `${userId}:${randomPart}:${timestamp}:${secretKey}`;
-  const hash = crypto.createHash("sha256").update(dataToHash).digest("hex");
-
-  // Определяем срок действия
   const expiresInMs = parseExpiresIn(config.security.jwtExpiresIn);
   const expiresAt = timestamp + expiresInMs;
 
-  // Формируем токен
-  const token = `${userId}.${randomPart}.${timestamp}.${expiresAt}.${hash}`;
-
-  const tokenString = `${userId}.${randomPart}.${timestamp}.${expiresAt}.${hash}`;
-
-  // Отладочный вывод - только в логи, не в ответ клиенту
-  console.log(`Token type: ${typeof tokenString}`);
-  console.log(`Generated token (first 20 chars): ${String(tokenString).substring(0, 20)}`);
+  // Генерируем JWT токен
+  const token = jwt.sign(
+    {
+      userId,
+      iat: Math.floor(timestamp / 1000),
+      exp: Math.floor(expiresAt / 1000),
+    },
+    config.security.jwtSecret
+  );
 
   // Сохраняем токен в базе данных
   await tokenRepository.saveToken({
@@ -34,20 +29,13 @@ export async function generateToken(userId: string, deviceInfo: Record<string, a
     deviceInfo,
   });
 
-  return tokenString; // Убедитесь, что возвращается строка, а не объект
+  return token;
 }
 
-// Проверяем валидность токена с учетом хранения в базе
+// Проверка JWT токена
 export async function validateToken(token: string): Promise<{ valid: boolean; userId?: string; expired?: boolean }> {
   try {
-    // Сначала проверяем структуру токена
-    const [userId, randomPart, timestamp, expiresAt, hash] = token.split(".");
-
-    if (!userId || !randomPart || !timestamp || !expiresAt || !hash) {
-      return { valid: false };
-    }
-
-    // Проверяем в базе данных
+    // Проверяем токен в базе данных
     const tokenData = await tokenRepository.getTokenByValue(token);
 
     // Если токен не найден или отозван
@@ -55,23 +43,26 @@ export async function validateToken(token: string): Promise<{ valid: boolean; us
       return { valid: false };
     }
 
-    // Проверяем, не истек ли токен
+    // Проверяем, не истек ли токен по времени в базе
     const currentTime = Date.now();
     if (currentTime > tokenData.expiresAt) {
-      return { valid: false, userId, expired: true };
+      return { valid: false, userId: tokenData.userId, expired: true };
     }
 
-    // Проверяем подпись токена
-    const secretKey = config.security.jwtSecret;
-    const dataToHash = `${userId}:${randomPart}:${timestamp}:${secretKey}`;
-    const expectedHash = crypto.createHash("sha256").update(dataToHash).digest("hex");
+    // Верифицируем JWT
+    const decoded = jwt.verify(token, config.security.jwtSecret) as { userId: string };
 
-    if (hash !== expectedHash) {
-      return { valid: false };
-    }
-
-    return { valid: true, userId };
+    return { valid: true, userId: decoded.userId };
   } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      // Получаем userId из просроченного токена
+      try {
+        const decoded = jwt.decode(token) as { userId: string };
+        return { valid: false, userId: decoded.userId, expired: true };
+      } catch {
+        return { valid: false, expired: true };
+      }
+    }
     return { valid: false };
   }
 }

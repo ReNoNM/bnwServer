@@ -141,14 +141,11 @@ export async function authenticatePlayer(
       return { success: false, error: "Неверные учетные данные" };
     }
 
-    // Создаем токен для авторизации
+    // Создаем JWT токен для авторизации
     const token = await generateToken(player.id);
 
-    // Проверяем, что токен - это строка, а не объект
-    if (typeof token !== "string") {
-      log(`ОШИБКА: Токен должен быть строкой, получен тип: ${typeof token}`, true);
-      return { success: false, error: "Ошибка генерации токена" };
-    }
+    // Обновляем статус пользователя
+    await playerRepository.update(player.id, { status: "online", lastLogin: Date.now() });
 
     // Логируем успешный вход
     log(`Игрок вошел в систему: ${player.username} (${player.id})`);
@@ -159,7 +156,7 @@ export async function authenticatePlayer(
     return {
       success: true,
       player: playerWithoutPassword,
-      token: token, // Здесь должна быть строка токена
+      token: token,
     };
   } catch (error) {
     log(`Ошибка при аутентификации игрока: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);

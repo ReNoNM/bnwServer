@@ -10,10 +10,12 @@
   },
   "dependencies": {
     "@sinclair/typebox": "^0.34.33",
+    "@types/jsonwebtoken": "^9.0.9",
     "ajv": "^8.17.1",
     "ajv-errors": "^3.0.0",
     "ajv-formats": "^3.0.1",
     "dotenv": "^16.5.0",
+    "jsonwebtoken": "^9.0.2",
     "kysely": "^0.28.2",
     "pg": "^8.15.6",
     "uuid": "^11.1.0",
