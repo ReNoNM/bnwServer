@@ -1,14 +1,14 @@
 import { Kysely } from "kysely";
 import { db } from "./connection";
 import { log, error as logError } from "../utils/logger";
-import { Database } from "./models/database";
+import { DB } from "./models/database";
 
 /**
  * Выполняет операцию внутри транзакции
  * @param fn Функция, которая будет выполнена внутри транзакции
  * @returns Результат выполнения функции или ошибку
  */
-export async function withTransaction<T>(fn: (trx: Kysely<Database>) => Promise<T>): Promise<T> {
+export async function withTransaction<T>(fn: (trx: Kysely<DB>) => Promise<T>): Promise<T> {
   try {
     // Используем встроенный механизм транзакций Kysely
     return await db.transaction().execute(fn);
@@ -23,7 +23,7 @@ export async function withTransaction<T>(fn: (trx: Kysely<Database>) => Promise<
  * @param queryFn Функция, выполняющая запрос к DB
  * @returns Результат запроса
  */
-export async function query<T>(queryFn: (db: Kysely<Database>) => Promise<T>): Promise<T> {
+export async function query<T>(queryFn: (db: Kysely<DB>) => Promise<T>): Promise<T> {
   try {
     return await queryFn(db);
   } catch (error) {
