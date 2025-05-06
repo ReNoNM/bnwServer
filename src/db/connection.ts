@@ -1,7 +1,7 @@
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 import { log, error as logError } from "../utils/logger";
-import { Database } from "./models/database";
+import { DB } from "./models/database";
 import config from "../../config"; // Обновленный импорт
 
 // Создаем пул подключений к PostgreSQL используя настройки из config
@@ -22,7 +22,7 @@ pool.on("error", (err) => {
 });
 
 // Создаем экземпляр Kysely
-export const db = new Kysely<Database>({
+export const db = new Kysely<DB>({
   dialect: new PostgresDialect({
     pool,
   }),

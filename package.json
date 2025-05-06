@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/bin/start.js",
-    "dev": "ts-node-dev --respawn --transpile-only bin/start.ts"
+    "dev": "ts-node-dev --respawn --transpile-only bin/start.ts",
+    "generatedb": "kysely-codegen --out-file ./src/db/models/database.ts"
   },
   "dependencies": {
     "dotenv": "^16.5.0",
@@ -20,6 +21,7 @@
     "@types/pg": "^8.11.14",
     "@types/uuid": "^10.0.0",
     "@types/ws": "^8.18.0",
+    "kysely-codegen": "^0.18.3",
     "ts-node-dev": "^2.0.0",
     "typescript": "^4.8.4"
   }
