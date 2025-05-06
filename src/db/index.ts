@@ -1,3 +1,4 @@
+// src/db/index.ts - дополненная версия для включения новой миграции
 import { initDatabase } from "./migrations/init";
 import { Player, PlayerDTO, playerToDTO } from "./models/player";
 import { ChatMessage, ChatMessageType } from "./models/chatMessage";
@@ -8,6 +9,7 @@ import * as chatRepository from "./repositories/chatRepository";
 // Инициализация базы данных при запуске
 export async function initializeDatabase(): Promise<void> {
   try {
+    // Запускаем основную миграцию
     await initDatabase();
   } catch (err) {
     logError(`Ошибка инициализации БД: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
@@ -24,8 +26,6 @@ export const getPlayerById = playerRepository.getById;
 export const getPlayerByUsername = playerRepository.getByUsername;
 export const addPlayer = playerRepository.add;
 export const updatePlayer = playerRepository.update;
-export const updatePlayerStatus = playerRepository.updateStatus;
-export const removePlayer = playerRepository.remove;
 
 export const getChatMessages = chatRepository.getAll;
 export const addChatMessage = chatRepository.add;

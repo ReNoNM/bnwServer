@@ -1,8 +1,11 @@
+// src/db/models/player.ts
 export interface Player {
   id: string;
   username: string;
   email: string;
   password: string;
+  tag?: string; // Добавлено новое поле tag
+  tagPosition?: string; // Добавлено новое поле tagPosition
   createdAt: number;
   lastLogin?: number;
   status: "online" | "offline";
@@ -19,6 +22,8 @@ export interface PlayerDTO {
   id: string;
   username: string;
   email: string;
+  tag?: string; // Добавлено новое поле tag
+  tagPosition?: string; // Добавлено новое поле tagPosition
   status: "online" | "offline";
   createdAt: number;
   lastLogin?: number;

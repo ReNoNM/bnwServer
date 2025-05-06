@@ -43,6 +43,8 @@ export interface Players {
   password: string;
   settings: Generated<Json | null>;
   status: Generated<string | null>;
+  tag: string | null;
+  tag_position: string | null;
   username: string;
 }
 

@@ -3,12 +3,22 @@ import { Player } from "../models/player";
 import { log, error as logError } from "../../utils/logger";
 import { sql } from "kysely";
 
-// Получение списка игроков
 export async function getAll(): Promise<Player[]> {
   try {
     const results = await db
       .selectFrom("players")
-      .select(["id", "username", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .select([
+        "id",
+        "username",
+        "email",
+        "password",
+        "tag",
+        "tag_position as tagPosition",
+        "created_at as createdAt",
+        "last_login as lastLogin",
+        "status",
+        "settings",
+      ])
       .execute();
 
     return results.map(
@@ -25,12 +35,23 @@ export async function getAll(): Promise<Player[]> {
   }
 }
 
-// Получение игрока по ID
+// Обновление метода getById для включения новых полей
 export async function getById(id: string): Promise<Player | undefined> {
   try {
     const result = await db
       .selectFrom("players")
-      .select(["id", "username", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .select([
+        "id",
+        "username",
+        "email",
+        "password",
+        "tag",
+        "tag_position as tagPosition",
+        "created_at as createdAt",
+        "last_login as lastLogin",
+        "status",
+        "settings",
+      ])
       .where("id", "=", id)
       .executeTakeFirst();
 
@@ -47,12 +68,23 @@ export async function getById(id: string): Promise<Player | undefined> {
   }
 }
 
-// Получение игрока по имени пользователя
+// Обновление метода getByUsername для включения новых полей
 export async function getByUsername(username: string): Promise<Player | undefined> {
   try {
     const result = await db
       .selectFrom("players")
-      .select(["id", "username", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .select([
+        "id",
+        "username",
+        "email",
+        "password",
+        "tag",
+        "tag_position as tagPosition",
+        "created_at as createdAt",
+        "last_login as lastLogin",
+        "status",
+        "settings",
+      ])
       .where(sql`LOWER(username)`, "=", username.toLowerCase())
       .executeTakeFirst();
 
@@ -69,19 +101,32 @@ export async function getByUsername(username: string): Promise<Player | undefine
   }
 }
 
-// Добавление нового игрока
+// Обновление метода add для включения новых полей
 export async function add(player: Omit<Player, "id" | "createdAt">): Promise<Player | undefined> {
   try {
     const result = await db
       .insertInto("players")
       .values({
         username: player.username,
+        email: player.email,
         password: player.password,
+        tag: player.tag,
+        tag_position: player.tagPosition,
         status: player.status,
         settings: player.settings || {},
-        email: player.email,
       })
-      .returning(["id", "username", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .returning([
+        "id",
+        "username",
+        "email",
+        "password",
+        "tag",
+        "tag_position as tagPosition",
+        "created_at as createdAt",
+        "last_login as lastLogin",
+        "status",
+        "settings",
+      ])
       .executeTakeFirst();
 
     if (!result) return undefined;
@@ -100,7 +145,7 @@ export async function add(player: Omit<Player, "id" | "createdAt">): Promise<Pla
   }
 }
 
-// Обновление данных игрока
+// Обновление метода update для работы с новыми полями
 export async function update(id: string, updates: Partial<Player>): Promise<boolean> {
   try {
     // Создаем объект для обновления, преобразуя camelCase в snake_case
@@ -109,6 +154,8 @@ export async function update(id: string, updates: Partial<Player>): Promise<bool
     if (updates.status !== undefined) updateValues.status = updates.status;
     if (updates.settings !== undefined) updateValues.settings = updates.settings as Record<string, unknown>;
     if (updates.lastLogin !== undefined) updateValues.last_login = new Date(updates.lastLogin);
+    if (updates.tag !== undefined) updateValues.tag = updates.tag;
+    if (updates.tagPosition !== undefined) updateValues.tag_position = updates.tagPosition;
 
     if (Object.keys(updateValues).length === 0) return false;
 
@@ -126,61 +173,23 @@ export async function update(id: string, updates: Partial<Player>): Promise<bool
   }
 }
 
-// Обновление статуса игрока
-export async function updateStatus(id: string, status: "online" | "offline"): Promise<boolean> {
-  try {
-    const updateValues: Record<string, any> = {
-      status: status,
-    };
-
-    if (status === "online") {
-      updateValues.last_login = new Date();
-    }
-
-    const result = await db.updateTable("players").set(updateValues).where("id", "=", id).returning(["id", "username"]).executeTakeFirst();
-
-    const success = !!result;
-    if (success) {
-      log(`Статус игрока обновлен: ${result.username} (${result.id}) - ${status}`);
-    }
-
-    return success;
-  } catch (err) {
-    logError(`Ошибка обновления статуса игрока: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
-    return false;
-  }
-}
-
-// Удаление игрока
-export async function remove(id: string): Promise<boolean> {
-  try {
-    return await db.transaction().execute(async (trx) => {
-      // Сначала удаляем все сообщения игрока
-      await trx
-        .deleteFrom("chat_messages")
-        .where((eb) => eb.or([eb("sender_id", "=", id), eb("receiver_id", "=", id)]))
-        .execute();
-
-      // Затем удаляем самого игрока
-      const result = await trx.deleteFrom("players").where("id", "=", id).returning(["id", "username"]).executeTakeFirst();
-
-      const success = !!result;
-      if (success) {
-        log(`Игрок удален: ${result.username} (${result.id})`);
-      }
-
-      return success;
-    });
-  } catch (err) {
-    logError(`Ошибка удаления игрока: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
-    return false;
-  }
-}
+// Обновление метода getByEmail для включения новых полей
 export async function getByEmail(email: string): Promise<Player | undefined> {
   try {
     const result = await db
       .selectFrom("players")
-      .select(["id", "username", "email", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .select([
+        "id",
+        "username",
+        "email",
+        "password",
+        "tag",
+        "tag_position as tagPosition",
+        "created_at as createdAt",
+        "last_login as lastLogin",
+        "status",
+        "settings",
+      ])
       .where("email", "=", email.toLowerCase())
       .executeTakeFirst();
 
