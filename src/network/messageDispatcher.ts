@@ -1,7 +1,8 @@
+// Часть файла src/network/messageDispatcher.ts
 import { WebSocket } from "ws";
 import { log, error as logError } from "../utils/logger";
 import { handleError } from "../utils/errorHandler";
-import { validateToken } from "../utils/tokenUtils";
+import { authenticateConnection } from "./middleware/auth";
 import { validateMessage, messageSchema, Message } from "./middleware/validation";
 
 // Тип для хранения обработчиков сообщений
@@ -28,7 +29,7 @@ const requiresAuth: Record<string, boolean> = {
 };
 
 // Диспетчер сообщений
-export function dispatchMessage(ws: WebSocket, data: string): void {
+export async function dispatchMessage(ws: WebSocket, data: string): Promise<void> {
   try {
     // Парсим JSON сообщение
     let message: any;
@@ -64,9 +65,24 @@ export function dispatchMessage(ws: WebSocket, data: string): void {
     }
 
     // Проверка авторизации
-    if (requiresAuth[route] && !(ws as any).playerData) {
-      sendErrorResponse(ws, "Требуется авторизация");
-      return;
+    if (requiresAuth[route]) {
+      // Проверяем, аутентифицирован ли пользователь уже
+      if (!(ws as any).playerData) {
+        // Если есть токен в сообщении, пробуем аутентифицироваться
+        const token = message.data?.token;
+
+        if (token) {
+          const isAuthenticated = await authenticateConnection(ws, token);
+          if (!isAuthenticated) {
+            sendErrorResponse(ws, "Требуется авторизация");
+            return;
+          }
+          // Если аутентификация успешна, продолжаем выполнение
+        } else {
+          sendErrorResponse(ws, "Требуется авторизация");
+          return;
+        }
+      }
     }
 
     // Поиск обработчика
@@ -111,15 +127,4 @@ function sendErrorResponse(ws: WebSocket, errorMessage: string): void {
     // Игнорируем ошибки отправки
     logError(`Не удалось отправить сообщение об ошибке: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
   }
-}
-
-// Повторная аутентификация по токену
-export function authenticateByToken(ws: WebSocket, token: string): boolean {
-  const result = validateToken(token);
-  if (result.valid && result.userId) {
-    (ws as any).playerData = { id: result.userId };
-    log(`Успешная авторизация по токену: ${result.userId}`);
-    return true;
-  }
-  return false;
 }

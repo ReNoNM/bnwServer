@@ -13,7 +13,7 @@ interface ClientInfo {
   isAuthenticated: boolean;
 }
 
-const clients: ClientInfo[] = [];
+export const clients: ClientInfo[] = [];
 const HEARTBEAT_INTERVAL = config.server.heartbeatInterval;
 
 export function handleMessage(ws: WebSocket, data: string): void {
@@ -103,35 +103,40 @@ export function startHeartbeat(): void {
   setInterval(() => {
     const now = Date.now();
 
-    clients.forEach((client) => {
-      // Проверяем активность клиента
-      const inactiveTime = now - client.lastActivity;
+    for (const client of clients) {
+      try {
+        // Проверяем активность клиента
+        const inactiveTime = now - client.lastActivity;
 
-      // Если клиент неактивен более 2 минут, закрываем соединение
-      if (inactiveTime > 120000) {
-        log(`Закрытие неактивного соединения ${client.username || client.id || "неизвестный пользователь"}`);
-        client.ws.close(1000, "Превышено время бездействия");
-        return;
-      }
+        // Если клиент неактивен более 3 минут, закрываем соединение
+        if (inactiveTime > 180000) {
+          log(`Закрытие неактивного соединения ${client.username || client.id || "неизвестный пользователь"}: ${inactiveTime}ms`);
+          client.ws.close(1000, "Превышено время бездействия");
+          continue; // Переходим к следующему клиенту
+        }
 
-      // Если клиент не отвечал более 30 секунд, отправляем пинг
-      if (inactiveTime > 30000 && client.ws.readyState === WebSocket.OPEN) {
-        try {
+        // Если клиент не отвечал более 30 секунд, отправляем пинг
+        if (inactiveTime > 30000 && client.ws.readyState === WebSocket.OPEN) {
+          log(`Отправка ping сообщения клиенту ${client.username || client.id || "неизвестный пользователь"}: ${inactiveTime}ms`);
           client.ws.send(
             JSON.stringify({
               action: "system/ping",
               data: { timestamp: now },
             })
           );
-        } catch (error) {
-          // Если не удается отправить сообщение, закрываем соединение
+        }
+      } catch (error) {
+        logError(`Ошибка в heartbeat для клиента: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
+        // Если не удается отправить сообщение, закрываем соединение
+        try {
           client.ws.close();
+        } catch (_) {
+          // Игнорируем ошибки при закрытии
         }
       }
-    });
+    }
   }, HEARTBEAT_INTERVAL);
 }
-
 // Обновление информации о клиенте после аутентификации
 export function updateClientInfo(ws: WebSocket, id: string, username: string): void {
   const client = clients.find((c) => c.ws === ws);
