@@ -37,7 +37,9 @@
         padding: 8px;
         margin-right: 5px;
       }
-      input[type="text"] {
+      input[type="text"],
+      input[type="email"],
+      input[type="password"] {
         width: 70%;
       }
       .panel {
@@ -60,6 +62,16 @@
         background-color: #f8d7da;
         color: #721c24;
       }
+      .token-display {
+        word-break: break-all;
+        margin-top: 10px;
+        padding: 8px;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+        display: none;
+      }
     </style>
   </head>
   <body>
@@ -78,12 +90,15 @@
     <div class="panel">
       <h2>Authentication</h2>
       <div>
-        <input type="text" id="username" placeholder="Username" value="admin" />
-        <input type="password" id="password" placeholder="Password" value="12345678" />
+        <input type="email" id="email" placeholder="Email" value="user@example.com" />
+        <input type="password" id="password" placeholder="Password" value="111111" />
         <button id="registerBtn" disabled>Register</button>
         <button id="loginBtn" disabled>Login</button>
+        <button id="refreshTokenBtn" disabled>Refresh Token</button>
+        <button id="logoutBtn" disabled>Logout</button>
       </div>
       <div id="authStatus" style="margin-top: 10px"></div>
+      <div id="tokenDisplay" class="token-display"></div>
     </div>
 
     <div class="panel">
@@ -99,7 +114,7 @@
     <script>
       let socket = null;
       let currentPlayer = null;
-      let token = null;
+      let accessToken = null;
 
       // DOM элементы
       const connectBtn = document.getElementById("connectBtn");
@@ -110,11 +125,14 @@
       const messageInput = document.getElementById("messageInput");
       const sendBtn = document.getElementById("sendBtn");
       const historyBtn = document.getElementById("historyBtn");
-      const usernameInput = document.getElementById("username");
+      const emailInput = document.getElementById("email");
       const passwordInput = document.getElementById("password");
       const registerBtn = document.getElementById("registerBtn");
       const loginBtn = document.getElementById("loginBtn");
+      const refreshTokenBtn = document.getElementById("refreshTokenBtn");
+      const logoutBtn = document.getElementById("logoutBtn");
       const authStatusDiv = document.getElementById("authStatus");
+      const tokenDisplayDiv = document.getElementById("tokenDisplay");
 
       // Функция для добавления сообщения в лог
       function addMessage(text, type) {
@@ -149,10 +167,14 @@
             disconnectBtn.disabled = true;
             registerBtn.disabled = true;
             loginBtn.disabled = true;
+            refreshTokenBtn.disabled = true;
+            logoutBtn.disabled = true;
             historyBtn.disabled = true;
             messageInput.disabled = true;
             sendBtn.disabled = true;
             currentPlayer = null;
+            accessToken = null;
+            tokenDisplayDiv.style.display = "none";
           };
 
           socket.onerror = (error) => {
@@ -181,11 +203,14 @@
                 case "auth/registerSuccess":
                   addMessage("Registration successful", "system");
                   currentPlayer = message.data.player;
-                  token = message.data.token;
-                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
+                  accessToken = message.data.accessToken;
+                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username} (${currentPlayer.email})`;
                   messageInput.disabled = false;
                   sendBtn.disabled = false;
                   historyBtn.disabled = false;
+                  refreshTokenBtn.disabled = false;
+                  logoutBtn.disabled = false;
+                  displayToken(accessToken);
                   break;
 
                 case "auth/registerFailed":
@@ -195,20 +220,88 @@
                 case "auth/loginSuccess":
                   addMessage("Login successful", "system");
                   currentPlayer = message.data.player;
-                  token = message.data.token;
-                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username}`;
+
+                  // Выводим тип и данные токена для отладки
+                  addMessage(`Token type: ${typeof message.data.accessToken}`, "system");
+                  addMessage(`Token data: ${JSON.stringify(message.data.accessToken)}`, "system");
+
+                  accessToken = message.data.accessToken;
+
+                  // Проверяем разные варианты расположения токена
+                  if (message.data.accessToken) {
+                    accessToken = message.data.accessToken;
+                  } else if (message.data.token) {
+                    accessToken = message.data.token;
+                  } else {
+                    accessToken = null;
+                    addMessage("Токен отсутствует в ответе сервера", "system");
+                  }
+
+                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username} (${currentPlayer.email || "email not provided"})`;
                   messageInput.disabled = false;
                   sendBtn.disabled = false;
                   historyBtn.disabled = false;
+                  refreshTokenBtn.disabled = false;
+                  logoutBtn.disabled = false;
+                  displayToken(accessToken);
                   break;
 
                 case "auth/loginFailed":
                   addMessage(`Login failed: ${message.data.error}`, "system");
                   break;
 
+                case "auth/tokenSuccess":
+                  addMessage("Token authentication successful", "system");
+                  currentPlayer = message.data.player;
+                  authStatusDiv.innerText = `Logged in as: ${currentPlayer.username} (${currentPlayer.email})`;
+                  messageInput.disabled = false;
+                  sendBtn.disabled = false;
+                  historyBtn.disabled = false;
+                  refreshTokenBtn.disabled = false;
+                  logoutBtn.disabled = false;
+                  break;
+
+                case "auth/tokenFailed":
+                  addMessage(`Token authentication failed: ${message.data.error}`, "system");
+                  if (message.data.expired) {
+                    addMessage("Token has expired. Please refresh your token.", "system");
+                  }
+                  break;
+
+                case "auth/refreshTokenSuccess":
+                  addMessage("Token refreshed successfully", "system");
+                  // Проверка формата токена
+                  accessToken = message.data.accessToken;
+                  if (!accessToken) {
+                    accessToken = message.data.token;
+                  }
+                  displayToken(accessToken);
+                  break;
+
+                case "auth/refreshTokenFailed":
+                  addMessage(`Failed to refresh token: ${message.data.error}`, "system");
+                  break;
+
+                case "auth/logoutSuccess":
+                  addMessage("Logout successful", "system");
+                  currentPlayer = null;
+                  accessToken = null;
+                  authStatusDiv.innerText = "";
+                  messageInput.disabled = true;
+                  sendBtn.disabled = true;
+                  historyBtn.disabled = true;
+                  refreshTokenBtn.disabled = true;
+                  logoutBtn.disabled = true;
+                  tokenDisplayDiv.style.display = "none";
+                  break;
+
+                case "auth/logoutFailed":
+                  addMessage(`Logout failed: ${message.data.error}`, "system");
+                  break;
+
                 case "chat/newMessage":
                   const chatMessage = message.data.message;
-                  const sender = chatMessage.username || chatMessage.senderId;
+                  const sender = chatMessage.metadata?.username || chatMessage.senderId;
                   const isOwnMessage = currentPlayer && chatMessage.senderId === currentPlayer.id;
                   const msgClass = isOwnMessage ? "sent" : "received";
                   addMessage(`${sender}: ${chatMessage.message}`, msgClass);
@@ -252,6 +345,27 @@
         }
       });
 
+      // Функция для отображения токена
+      function displayToken(token) {
+        if (token) {
+          let tokenText = "";
+
+          if (typeof token === "object") {
+            // Если token - объект, преобразуем его в JSON
+            tokenText = JSON.stringify(token, null, 2);
+          } else {
+            // Если token - строка или примитив, преобразуем в строку
+            tokenText = String(token);
+          }
+
+          tokenDisplayDiv.innerHTML = `<strong>Access Token:</strong><br>${tokenText}`;
+          tokenDisplayDiv.style.display = "block";
+        } else {
+          tokenDisplayDiv.style.display = "none";
+          addMessage("Токен не получен", "system");
+        }
+      }
+
       // Отключение от сервера
       disconnectBtn.addEventListener("click", () => {
         if (socket) {
@@ -261,19 +375,19 @@
 
       // Регистрация пользователя
       registerBtn.addEventListener("click", () => {
-        const username = usernameInput.value.trim();
+        const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
 
-        if (!username || !password) {
-          addMessage("Username and password are required", "system");
+        if (!email || !password) {
+          addMessage("Email and password are required", "system");
           return;
         }
 
         if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(
             JSON.stringify({
-              action: "auth/register",
-              data: { username, password },
+              action: "auth/registerEmail",
+              data: { email, password },
             })
           );
         } else {
@@ -283,19 +397,61 @@
 
       // Вход пользователя
       loginBtn.addEventListener("click", () => {
-        const username = usernameInput.value.trim();
+        const email = emailInput.value.trim();
         const password = passwordInput.value.trim();
 
-        if (!username || !password) {
-          addMessage("Username and password are required", "system");
+        if (!email || !password) {
+          addMessage("Email and password are required", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const loginData = {
+            action: "auth/login",
+            data: { email, password },
+          };
+
+          // Отладочная информация
+          console.log("Отправляем запрос на вход:", loginData);
+          addMessage(`Отправка запроса на вход: ${JSON.stringify(loginData)}`, "system");
+
+          socket.send(JSON.stringify(loginData));
+        } else {
+          addMessage("Not connected to server", "system");
+        }
+      });
+
+      // Обновление токена
+      refreshTokenBtn.addEventListener("click", () => {
+        if (!accessToken) {
+          addMessage("No token available to refresh", "system");
           return;
         }
 
         if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(
             JSON.stringify({
-              action: "auth/login",
-              data: { username, password },
+              action: "auth/refreshToken",
+              data: { token: accessToken },
+            })
+          );
+        } else {
+          addMessage("Not connected to server", "system");
+        }
+      });
+
+      // Выход из системы
+      logoutBtn.addEventListener("click", () => {
+        if (!currentPlayer) {
+          addMessage("Not logged in", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "auth/logout",
+              data: { token: accessToken },
             })
           );
         } else {

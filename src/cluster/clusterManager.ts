@@ -19,6 +19,19 @@ export function startCluster(): void {
     log(`Основной процесс ${process.pid} запущен`);
     log(`Запуск ${numWorkers} рабочих процессов...`);
 
+    const tokensCleanupInterval = 60 * 60 * 1000; // 1 час
+    setInterval(async () => {
+      try {
+        const { cleanupExpiredTokens } = require("../db/repositories/tokenRepository");
+        const deletedCount = await cleanupExpiredTokens();
+        if (deletedCount > 0) {
+          log(`Очищено ${deletedCount} устаревших токенов`);
+        }
+      } catch (err) {
+        logError(`Ошибка при очистке устаревших токенов: ${err}`);
+      }
+    }, tokensCleanupInterval);
+
     // Создаём workers
     for (let i = 0; i < numWorkers; i++) {
       cluster.fork();

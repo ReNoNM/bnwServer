@@ -59,6 +59,24 @@ const tables: TableDefinition[] = [
       { name: "idx_chat_messages_type", columns: "type" },
     ],
   },
+  {
+    name: "tokens",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "token", type: "VARCHAR(255)", constraints: "NOT NULL UNIQUE" },
+      { name: "user_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id)" },
+      { name: "issued_at", type: "BIGINT", constraints: "NOT NULL" },
+      { name: "expires_at", type: "BIGINT", constraints: "NOT NULL" },
+      { name: "revoked", type: "BOOLEAN", defaultValue: "false" },
+      { name: "device_info", type: "JSONB", defaultValue: "'{}'::jsonb" },
+    ],
+    indexes: [
+      { name: "idx_tokens_user_id", columns: "user_id" },
+      { name: "idx_tokens_expires_at", columns: "expires_at" },
+      { name: "idx_tokens_token", columns: "token" },
+      { name: "idx_tokens_revoked", columns: "revoked" },
+    ],
+  },
 ];
 
 // Функция для выполнения начальных миграций базы данных

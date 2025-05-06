@@ -48,7 +48,18 @@ export interface Players {
   username: string;
 }
 
+export interface Tokens {
+  device_info: Generated<Json | null>;
+  expires_at: Int8;
+  id: Generated<string>;
+  issued_at: Int8;
+  revoked: Generated<boolean | null>;
+  token: string;
+  user_id: string;
+}
+
 export interface DB {
   chat_messages: ChatMessages;
   players: Players;
+  tokens: Tokens;
 }

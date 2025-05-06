@@ -122,34 +122,45 @@ export async function completeRegistration(
     return { success: false, error: "Ошибка при завершении регистрации" };
   }
 }
+// В функции authenticatePlayer
 export async function authenticatePlayer(
-  username: string,
+  email: string,
   password: string
 ): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
   try {
-    // Ищем пользователя по имени
-    const player = await playerRepository.getByUsername(username);
+    // Найти пользователя по email
+    const player = await playerRepository.getByEmail(email);
 
     if (!player) {
       return { success: false, error: "Неверные учетные данные" };
     }
 
-    // Проверяем пароль
+    // Проверить пароль
     if (!verifyPassword(player.password, password)) {
-      log(`Неудачная попытка входа: ${username}`, true);
+      log(`Неудачная попытка входа: ${email}`, true);
       return { success: false, error: "Неверные учетные данные" };
     }
 
     // Создаем токен для авторизации
-    const token = generateToken(player.id);
+    const token = await generateToken(player.id);
+
+    // Проверяем, что токен - это строка, а не объект
+    if (typeof token !== "string") {
+      log(`ОШИБКА: Токен должен быть строкой, получен тип: ${typeof token}`, true);
+      return { success: false, error: "Ошибка генерации токена" };
+    }
 
     // Логируем успешный вход
-    log(`Игрок вошел в систему: ${username} (${player.id})`);
+    log(`Игрок вошел в систему: ${player.username} (${player.id})`);
 
     // Не отправляем пароль клиенту
     const { password: _, ...playerWithoutPassword } = player;
 
-    return { success: true, player: playerWithoutPassword, token };
+    return {
+      success: true,
+      player: playerWithoutPassword,
+      token: token, // Здесь должна быть строка токена
+    };
   } catch (error) {
     log(`Ошибка при аутентификации игрока: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);
     return { success: false, error: "Ошибка при аутентификации" };

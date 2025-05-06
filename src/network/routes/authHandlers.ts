@@ -15,13 +15,14 @@ import {
   type VerifyCodePayload,
   type CompleteRegistrationPayload,
 } from "../middleware/validation";
-import { addOnlinePlayer } from "../../game/stateManager";
+import { addOnlinePlayer, removeOnlinePlayer } from "../../game/stateManager";
 import { log } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
 import { registerHandler } from "../messageDispatcher";
 import { updateClientInfo } from "../socketHandler";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
-import { validateToken } from "../../utils/tokenUtils";
+import { generateToken, revokeAllUserTokens, revokeToken, validateToken } from "../../utils/tokenUtils";
+import { playerRepository } from "../../db";
 
 // Обработчик первого шага регистрации (отправка кода на почту)
 async function handleRegisterEmail(ws: WebSocket, data: any): Promise<void> {
@@ -125,8 +126,7 @@ async function handleCompleteRegistration(ws: WebSocket, data: any): Promise<voi
     sendSystemError(ws, "Ошибка при обработке запроса завершения регистрации");
   }
 }
-
-// Обработчик входа
+// В функцию handleLogin внесем изменения:
 async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage<LoginPayload>(loginPayloadSchema, data);
@@ -135,16 +135,17 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const { username, password } = validation.data;
-    log(`Попытка входа: ${username}`);
+    const { email, password } = validation.data;
+    log(`Попытка входа по email: ${email}`);
 
-    const result = await authenticatePlayer(username, password);
+    const result = await authenticatePlayer(email, password);
 
     if (result.success && result.player) {
       // Сохраняем данные о пользователе в объекте соединения
       (ws as any).playerData = {
         id: result.player.id,
         username: result.player.username,
+        email: result.player.email,
       };
 
       // Обновляем информацию о клиенте
@@ -152,19 +153,65 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
 
       addOnlinePlayer(result.player.id);
 
+      const responseToken = result.token;
+      log(`Вход успешен: ${email} (${result.player.username}), токен получен`);
+      // Отправляем токен как строку, а не как объект
       sendSuccess(ws, "auth/login", {
         player: result.player,
-        token: result.token,
+        accessToken: responseToken, // Убедитесь, что это строка, а не объект
       });
-
-      log(`Вход успешен: ${username}`);
     } else {
       sendError(ws, "auth/login", result.error || "Неизвестная ошибка");
-      log(`Ошибка входа: ${username} - ${result.error}`);
+      log(`Ошибка входа: ${email} - ${result.error}`);
     }
   } catch (error) {
     handleError(error as Error, "AuthHandlers.login");
     sendSystemError(ws, "Ошибка при обработке запроса входа");
+  }
+}
+
+// src/network/routes/authHandlers.ts (добавление)
+// Обработчик обновления токена
+async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const validation = validateMessage<TokenPayload>(tokenPayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "auth/refreshToken", "Ошибка валидации токена", { details: validation.errors });
+      return;
+    }
+
+    const result = await validateToken(validation.data.token);
+
+    // Если токен истек, но был валидным
+    if (!result.valid && result.expired && result.userId) {
+      // Создаем новый токен
+      const newToken = generateToken(result.userId);
+
+      // Обновляем данные пользователя
+      const player = await playerRepository.getById(result.userId);
+      if (!player) {
+        sendError(ws, "auth/refreshToken", "Пользователь не найден");
+        return;
+      }
+
+      sendSuccess(ws, "auth/refreshToken", {
+        accessToken: newToken, // Изменили имя поля с token на accessToken
+        message: "Токен успешно обновлен",
+      });
+
+      log(`Токен обновлен для пользователя: ${player.username} (${player.id})`);
+    } else if (!result.valid) {
+      sendError(ws, "auth/refreshToken", "Недействительный токен");
+    } else {
+      // Токен еще действителен, просто возвращаем его
+      sendSuccess(ws, "auth/refreshToken", {
+        accessToken: validation.data.token, // Изменили имя поля с token на accessToken
+        message: "Токен еще действителен",
+      });
+    }
+  } catch (error) {
+    handleError(error as Error, "AuthHandlers.refreshToken");
+    sendSystemError(ws, "Ошибка при обработке запроса обновления токена");
   }
 }
 
@@ -177,17 +224,38 @@ async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const result = validateToken(validation.data.token);
+    const result = await validateToken(validation.data.token);
 
     if (result.valid && result.userId) {
+      // Получаем данные пользователя
+      const player = await playerRepository.getById(result.userId);
+
+      if (!player) {
+        sendError(ws, "auth/token", "Пользователь не найден");
+        return;
+      }
+
       // Сохраняем данные о пользователе в объекте соединения
       (ws as any).playerData = {
-        id: result.userId,
+        id: player.id,
+        username: player.username,
+        email: player.email,
       };
+
+      // Обновляем информацию о клиенте
+      updateClientInfo(ws, player.id, player.username);
+
+      // Добавляем игрока в список онлайн
+      addOnlinePlayer(player.id);
 
       sendSuccess(ws, "auth/token", {
         message: "Аутентификация по токену успешна",
+        player: { id: player.id, username: player.username, email: player.email },
       });
+
+      log(`Аутентификация по токену: ${player.username} (${player.id})`);
+    } else if (result.expired) {
+      sendError(ws, "auth/token", "Токен истек", { expired: true });
     } else {
       sendError(ws, "auth/token", "Недействительный токен");
     }
@@ -225,11 +293,68 @@ async function handlePasswordReset(ws: WebSocket, data: any): Promise<void> {
   }
 }
 
+async function handleLogout(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const playerData = (ws as any).playerData;
+
+    // Если пользователь не авторизован, ничего не делаем
+    if (!playerData || !playerData.id) {
+      sendError(ws, "auth/logout", "Вы не авторизованы");
+      return;
+    }
+
+    // Если передан токен, отзываем только его
+    if (data.token) {
+      const success = await revokeToken(data.token);
+
+      if (success) {
+        sendSuccess(ws, "auth/logout", {
+          message: "Выход выполнен успешно",
+        });
+
+        // Удаляем информацию о пользователе из соединения
+        delete (ws as any).playerData;
+
+        log(`Пользователь вышел из системы: ${playerData.id}`);
+      } else {
+        sendError(ws, "auth/logout", "Ошибка при выходе из системы");
+      }
+    }
+    // Если токен не передан, отзываем все токены пользователя
+    else {
+      const success = await revokeAllUserTokens(playerData.id);
+
+      if (success) {
+        sendSuccess(ws, "auth/logout", {
+          message: "Выход выполнен успешно на всех устройствах",
+        });
+
+        // Удаляем информацию о пользователе из соединения
+        delete (ws as any).playerData;
+
+        log(`Пользователь вышел из системы на всех устройствах: ${playerData.id}`);
+      } else {
+        sendError(ws, "auth/logout", "Ошибка при выходе из системы");
+      }
+    }
+
+    // Обновляем статус игрока с использованием метода update
+    await playerRepository.update(playerData.id, { status: "offline" });
+
+    // Удаляем из списка онлайн-игроков
+    removeOnlinePlayer(playerData.id);
+  } catch (error) {
+    handleError(error as Error, "AuthHandlers.logout");
+    sendSystemError(ws, "Ошибка при обработке запроса выхода");
+  }
+}
 // Регистрация обработчиков
 export function registerAuthHandlers(): void {
   // Обработчики для аутентификации
   registerHandler("auth", "login", handleLogin);
   registerHandler("auth", "token", handleTokenAuth);
+  registerHandler("auth", "refreshToken", handleRefreshToken);
+  registerHandler("auth", "logout", handleLogout);
 
   // Новые обработчики для трехэтапной регистрации
   registerHandler("auth", "registerEmail", handleRegisterEmail);

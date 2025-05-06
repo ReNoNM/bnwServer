@@ -24,9 +24,9 @@ export const registerPayloadSchema = Type.Object({
 
 // Схема для входа
 export const loginPayloadSchema = Type.Object({
-  username: Type.String({
-    minLength: 1,
-    errorMessage: { minLength: "Введите имя пользователя" },
+  email: Type.String({
+    format: "email",
+    errorMessage: { format: "Некорректный формат почты" },
   }),
   password: Type.String({
     minLength: 1,
