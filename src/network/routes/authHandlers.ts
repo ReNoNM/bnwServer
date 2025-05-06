@@ -1,6 +1,7 @@
 import { WebSocket } from "ws";
 import { registerPlayer, authenticatePlayer } from "../../game/engine/authEngine";
-import { validateMessage, registerPayloadSchema, loginPayloadSchema } from "../middleware/validation";
+import { validateMessage, registerPayloadSchema, loginPayloadSchema, tokenPayloadSchema } from "../middleware/validation";
+import { type RegisterPayload, type LoginPayload, type TokenPayload } from "../middleware/validation";
 import { addOnlinePlayer } from "../../game/stateManager";
 import { log } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
@@ -12,7 +13,7 @@ import { validateToken } from "../../utils/tokenUtils";
 // Обработчик регистрации
 async function handleRegister(ws: WebSocket, data: any): Promise<void> {
   try {
-    const validation = validateMessage(registerPayloadSchema, data);
+    const validation = validateMessage<RegisterPayload>(registerPayloadSchema, data);
     if (!validation.success) {
       sendError(ws, "auth/register", "Ошибка валидации", { details: validation.errors });
       return;
@@ -54,7 +55,7 @@ async function handleRegister(ws: WebSocket, data: any): Promise<void> {
 // Обработчик входа
 async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   try {
-    const validation = validateMessage(loginPayloadSchema, data);
+    const validation = validateMessage<LoginPayload>(loginPayloadSchema, data);
     if (!validation.success) {
       sendError(ws, "auth/login", "Ошибка валидации", { details: validation.errors });
       return;
@@ -96,12 +97,13 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
 // Обработчик аутентификации по токену
 async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
   try {
-    if (!data.token) {
-      sendError(ws, "auth/token", "Токен не предоставлен");
+    const validation = validateMessage<TokenPayload>(tokenPayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "auth/token", "Ошибка валидации токена", { details: validation.errors });
       return;
     }
 
-    const result = validateToken(data.token);
+    const result = validateToken(validation.data.token);
 
     if (result.valid && result.userId) {
       // Сохраняем данные о пользователе в объекте соединения

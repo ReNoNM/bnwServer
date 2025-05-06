@@ -2,6 +2,7 @@ import { WebSocket } from "ws";
 import { log, error as logError } from "../utils/logger";
 import { handleError } from "../utils/errorHandler";
 import { validateToken } from "../utils/tokenUtils";
+import { validateMessage, messageSchema, Message } from "./middleware/validation";
 
 // Тип для хранения обработчиков сообщений
 type MessageHandler = (ws: WebSocket, data: any) => void | Promise<void>;
@@ -19,37 +20,39 @@ export function registerHandler(route: string, action: string, handler: MessageH
 }
 
 // Проверяем, требуется ли аутентификация для маршрута
-// Для тестирования отключаем проверку для чата
-// Проверяем, требуется ли аутентификация для маршрута
 const requiresAuth: Record<string, boolean> = {
   auth: false, // Маршруты аутентификации не требуют предварительной авторизации
-  chat: true, // Обновляем: для чата ТРЕБУЕТСЯ авторизация
+  chat: true, // Для чата требуется авторизация
   player: true, // Маршруты игрока требуют авторизацию
   system: false, // Системные маршруты (пинг, статус) не требуют авторизации
 };
+
 // Диспетчер сообщений
 export function dispatchMessage(ws: WebSocket, data: string): void {
   try {
-    const message = JSON.parse(data);
+    // Парсим JSON сообщение
+    let message: any;
+    try {
+      message = JSON.parse(data);
+    } catch (e) {
+      sendErrorResponse(ws, "Некорректный формат JSON");
+      return;
+    }
 
     // Обновляем время последней активности
     (ws as any).lastActivity = Date.now();
 
-    // Проверяем формат сообщения
-    if (!message.action || typeof message.action !== "string") {
-      sendErrorResponse(ws, 'Некорректный формат сообщения. Ожидается поле "action"');
+    // Валидируем базовую структуру сообщения
+    const validation = validateMessage<Message>(messageSchema, message);
+    if (!validation.success) {
+      sendErrorResponse(ws, `Ошибка формата сообщения: ${validation.errors.join(", ")}`);
       return;
     }
 
     // Разбираем маршрут в формате "route/action"
-    const [route, action] = message.action.split("/");
+    const [route, action] = validation.data.action.split("/");
 
-    if (!route || !action) {
-      sendErrorResponse(ws, 'Некорректный формат action. Ожидается "route/action"');
-      return;
-    }
-
-    // Обработка пинга
+    // Обработка пинга - специальный случай
     if (route === "system" && action === "ping") {
       ws.send(
         JSON.stringify({
@@ -60,7 +63,7 @@ export function dispatchMessage(ws: WebSocket, data: string): void {
       return;
     }
 
-    // Проверка авторизации (отключена для чата в тестовом режиме)
+    // Проверка авторизации
     if (requiresAuth[route] && !(ws as any).playerData) {
       sendErrorResponse(ws, "Требуется авторизация");
       return;

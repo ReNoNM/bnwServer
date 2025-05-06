@@ -5,6 +5,8 @@ import { log, error as logError } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
 import { registerHandler } from "../messageDispatcher";
 import { sendSuccess, sendError, sendSystemError, sendMessage } from "../../utils/websocketUtils";
+import { validateMessage, chatHistoryPayloadSchema, privateMessagePayloadSchema } from "../middleware/validation";
+import { type ChatHistoryPayload, type PrivateMessagePayload } from "../middleware/validation";
 
 // Простое экранирование HTML для предотвращения XSS
 function escapeHtml(text: string): string {
@@ -74,8 +76,16 @@ async function handleSendMessage(ws: WebSocket, data: any): Promise<void> {
 // Обработчик получения истории чата
 async function handleGetHistory(ws: WebSocket, data: any): Promise<void> {
   try {
-    const limit = data.limit || 50;
-    const before = data.before || undefined;
+    const validation = validateMessage<ChatHistoryPayload>(chatHistoryPayloadSchema, data);
+
+    // Используем значения по умолчанию, если валидация не прошла или данные не указаны
+    let limit = 50;
+    let before = undefined;
+
+    if (validation.success) {
+      limit = validation.data.limit || limit;
+      before = validation.data.before;
+    }
 
     const history = await getChatHistory(limit, before);
 
@@ -88,8 +98,55 @@ async function handleGetHistory(ws: WebSocket, data: any): Promise<void> {
   }
 }
 
+// Обработчик отправки приватного сообщения
+async function handlePrivateMessage(ws: WebSocket, data: any): Promise<void> {
+  try {
+    // Получаем данные пользователя из соединения
+    const playerData = (ws as any).playerData;
+
+    // Проверка авторизации
+    if (!playerData || !playerData.id) {
+      sendError(ws, "chat/privateMessage", "Для отправки личных сообщений необходимо авторизоваться");
+      return;
+    }
+
+    const validation = validateMessage<PrivateMessagePayload>(privateMessagePayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "chat/privateMessage", "Ошибка валидации", { details: validation.errors });
+      return;
+    }
+
+    const { receiverId, message } = validation.data;
+
+    // Проверка на спам
+    if (isSpamming(playerData.id)) {
+      sendError(ws, "chat/privateMessage", "Слишком частая отправка сообщений. Пожалуйста, подождите");
+      return;
+    }
+
+    // Экранируем сообщение для предотвращения XSS
+    const sanitizedText = escapeHtml(message);
+
+    // Здесь можно добавить проверку существования получателя
+    // ...
+
+    // Отправляем приватное сообщение (можно добавить реализацию в chatEngine)
+    // const result = await sendPrivateMessage(playerData.id, receiverId, sanitizedText, playerData.username);
+
+    // Пока просто заглушка
+    sendSuccess(ws, "chat/privateMessage", {
+      sent: true,
+      timestamp: Date.now(),
+    });
+  } catch (error) {
+    handleError(error as Error, "ChatHandlers.privateMessage");
+    sendSystemError(ws, "Ошибка при отправке личного сообщения");
+  }
+}
+
 // Регистрация обработчиков
 export function registerChatHandlers(): void {
   registerHandler("chat", "sendMessage", handleSendMessage);
   registerHandler("chat", "getHistory", handleGetHistory);
+  registerHandler("chat", "privateMessage", handlePrivateMessage);
 }
