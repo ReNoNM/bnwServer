@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Тестовый клиент регистрации</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .panel {
+        margin-bottom: 20px;
+        padding: 15px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        background-color: #f9f9f9;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: bold;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      button {
+        padding: 10px 15px;
+        background-color: #4caf50;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+      button:disabled {
+        background-color: #cccccc;
+        cursor: not-allowed;
+      }
+      .status {
+        padding: 5px 10px;
+        border-radius: 3px;
+        font-weight: bold;
+        margin: 10px 0;
+      }
+      .connected {
+        background-color: #d4edda;
+        color: #155724;
+      }
+      .disconnected {
+        background-color: #f8d7da;
+        color: #721c24;
+      }
+      #messages {
+        height: 300px;
+        border: 1px solid #ccc;
+        overflow-y: scroll;
+        margin-bottom: 10px;
+        padding: 10px;
+        background-color: #fff;
+      }
+      .message {
+        margin-bottom: 5px;
+        padding: 5px;
+        border-bottom: 1px solid #eee;
+      }
+      .system {
+        color: red;
+      }
+      .sent {
+        color: blue;
+      }
+      .received {
+        color: green;
+      }
+      .registration-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 20px;
+      }
+      .step {
+        flex: 1;
+        text-align: center;
+        padding: 10px;
+        border: 1px solid #ddd;
+        background-color: #f1f1f1;
+      }
+      .step.active {
+        background-color: #4caf50;
+        color: white;
+      }
+      .step-content {
+        display: none;
+      }
+      .step-content.active {
+        display: block;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Тестовый клиент трехэтапной регистрации</h1>
+
+    <div class="panel">
+      <h2>Подключение к серверу</h2>
+      <div class="form-group">
+        <label for="serverUrl">URL сервера</label>
+        <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="WebSocket URL" />
+      </div>
+      <button id="connectBtn">Подключиться</button>
+      <button id="disconnectBtn" disabled>Отключиться</button>
+      <div id="connectionStatus" class="status disconnected">Отключено</div>
+    </div>
+
+    <div id="registrationPanel" class="panel" style="display: none">
+      <h2>Регистрация</h2>
+
+      <div class="registration-steps">
+        <div class="step active" id="step1">Шаг 1: Email</div>
+        <div class="step" id="step2">Шаг 2: Код подтверждения</div>
+        <div class="step" id="step3">Шаг 3: Имя пользователя</div>
+      </div>
+
+      <!-- Шаг 1: Ввод email и пароля -->
+      <div class="step-content active" id="step1Content">
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input type="email" id="email" placeholder="Введите ваш email" />
+        </div>
+        <div class="form-group">
+          <label for="password">Пароль</label>
+          <input type="password" id="password" placeholder="Создайте пароль" />
+        </div>
+        <button id="sendEmailBtn">Отправить код</button>
+      </div>
+
+      <!-- Шаг 2: Ввод кода подтверждения -->
+      <div class="step-content" id="step2Content">
+        <div class="form-group">
+          <label for="verificationCode">Код подтверждения</label>
+          <input type="text" id="verificationCode" placeholder="Введите код из письма" />
+        </div>
+        <button id="verifyCodeBtn">Проверить код</button>
+      </div>
+
+      <!-- Шаг 3: Ввод имени пользователя -->
+      <div class="step-content" id="step3Content">
+        <div class="form-group">
+          <label for="username">Имя пользователя</label>
+          <input type="text" id="username" placeholder="Выберите имя пользователя" />
+        </div>
+        <button id="completeRegistrationBtn">Завершить регистрацию</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Лог сообщений</h2>
+      <div id="messages"></div>
+    </div>
+
+    <script>
+      // DOM-элементы
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const serverUrlInput = document.getElementById("serverUrl");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const registrationPanel = document.getElementById("registrationPanel");
+      const messagesDiv = document.getElementById("messages");
+
+      // Элементы для регистрации
+      const emailInput = document.getElementById("email");
+      const passwordInput = document.getElementById("password");
+      const verificationCodeInput = document.getElementById("verificationCode");
+      const usernameInput = document.getElementById("username");
+      const sendEmailBtn = document.getElementById("sendEmailBtn");
+      const verifyCodeBtn = document.getElementById("verifyCodeBtn");
+      const completeRegistrationBtn = document.getElementById("completeRegistrationBtn");
+
+      // Элементы для шагов регистрации
+      const step1 = document.getElementById("step1");
+      const step2 = document.getElementById("step2");
+      const step3 = document.getElementById("step3");
+      const step1Content = document.getElementById("step1Content");
+      const step2Content = document.getElementById("step2Content");
+      const step3Content = document.getElementById("step3Content");
+
+      // Глобальные переменные
+      let socket = null;
+      let registrationData = {
+        email: "",
+        verificationToken: "",
+      };
+
+      // Функция для добавления сообщения в лог
+      function addMessage(text, type) {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${type}`;
+        messageDiv.innerText = text;
+        messagesDiv.appendChild(messageDiv);
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
+      }
+
+      // Переключение между шагами регистрации
+      function showStep(stepNumber) {
+        // Сбрасываем активный класс у всех шагов
+        [step1, step2, step3].forEach((step) => step.classList.remove("active"));
+        [step1Content, step2Content, step3Content].forEach((content) => content.classList.remove("active"));
+
+        // Активируем нужный шаг
+        if (stepNumber === 1) {
+          step1.classList.add("active");
+          step1Content.classList.add("active");
+        } else if (stepNumber === 2) {
+          step2.classList.add("active");
+          step2Content.classList.add("active");
+        } else if (stepNumber === 3) {
+          step3.classList.add("active");
+          step3Content.classList.add("active");
+        }
+      }
+
+      // Обработчик подключения
+      connectBtn.addEventListener("click", () => {
+        const url = serverUrlInput.value;
+        try {
+          socket = new WebSocket(url);
+
+          socket.onopen = () => {
+            addMessage("Соединение с сервером установлено", "system");
+            connectionStatus.innerText = "Подключено";
+            connectionStatus.className = "status connected";
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            registrationPanel.style.display = "block";
+          };
+
+          socket.onclose = () => {
+            addMessage("Соединение с сервером закрыто", "system");
+            connectionStatus.innerText = "Отключено";
+            connectionStatus.className = "status disconnected";
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            registrationPanel.style.display = "none";
+          };
+
+          socket.onerror = (error) => {
+            addMessage(`Ошибка: ${error.message || "Неизвестная ошибка"}`, "system");
+          };
+
+          socket.onmessage = (event) => {
+            try {
+              const message = JSON.parse(event.data);
+              addMessage(`Получено: ${JSON.stringify(message, null, 2)}`, "received");
+
+              // Обработка ответов сервера
+              handleServerResponse(message);
+            } catch (e) {
+              addMessage(`Ошибка разбора сообщения: ${event.data}`, "system");
+            }
+          };
+        } catch (error) {
+          addMessage(`Ошибка подключения: ${error.message}`, "system");
+        }
+      });
+
+      // Обработчик отключения
+      disconnectBtn.addEventListener("click", () => {
+        if (socket) {
+          socket.close();
+        }
+      });
+
+      // Обработчик отправки email и пароля (Шаг 1)
+      sendEmailBtn.addEventListener("click", () => {
+        const email = emailInput.value.trim();
+        const password = passwordInput.value.trim();
+
+        if (!email || !password) {
+          addMessage("Введите email и пароль", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const data = {
+            action: "auth/registerEmail",
+            data: { email, password },
+          };
+
+          socket.send(JSON.stringify(data));
+          registrationData.email = email; // Сохраняем email для следующих шагов
+          addMessage(`Отправлено: ${JSON.stringify(data)}`, "sent");
+        } else {
+          addMessage("Нет подключения к серверу", "system");
+        }
+      });
+
+      // Обработчик проверки кода (Шаг 2)
+      verifyCodeBtn.addEventListener("click", () => {
+        const code = verificationCodeInput.value.trim();
+
+        if (!code) {
+          addMessage("Введите код подтверждения", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const data = {
+            action: "auth/verifyCode",
+            data: {
+              email: registrationData.email,
+              code,
+            },
+          };
+
+          socket.send(JSON.stringify(data));
+          addMessage(`Отправлено: ${JSON.stringify(data)}`, "sent");
+        } else {
+          addMessage("Нет подключения к серверу", "system");
+        }
+      });
+
+      // Обработчик завершения регистрации (Шаг 3)
+      completeRegistrationBtn.addEventListener("click", () => {
+        const username = usernameInput.value.trim();
+
+        if (!username) {
+          addMessage("Введите имя пользователя", "system");
+          return;
+        }
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const data = {
+            action: "auth/completeRegistration",
+            data: {
+              email: registrationData.email,
+              username,
+              verificationToken: registrationData.verificationToken,
+            },
+          };
+
+          socket.send(JSON.stringify(data));
+          addMessage(`Отправлено: ${JSON.stringify(data)}`, "sent");
+        } else {
+          addMessage("Нет подключения к серверу", "system");
+        }
+      });
+
+      // Обработка ответов от сервера
+      function handleServerResponse(message) {
+        // Обработка ответов по шагам регистрации
+        switch (message.action) {
+          case "auth/registerEmailSuccess":
+            addMessage("Код подтверждения отправлен на email", "system");
+            showStep(2); // Переход к вводу кода
+            break;
+
+          case "auth/verifyCodeSuccess":
+            if (message.data && message.data.verificationToken) {
+              registrationData.verificationToken = message.data.verificationToken;
+              addMessage("Код подтвержден. Выберите имя пользователя", "system");
+              showStep(3); // Переход к вводу имени
+            }
+            break;
+
+          case "auth/completeRegistrationSuccess":
+            addMessage("Регистрация успешно завершена!", "system");
+            if (message.data && message.data.player) {
+              addMessage(`Добро пожаловать, ${message.data.player.username}!`, "system");
+            }
+            break;
+
+          case "auth/registerEmailFailed":
+          case "auth/verifyCodeFailed":
+          case "auth/completeRegistrationFailed":
+            if (message.data && message.data.error) {
+              addMessage(`Ошибка: ${message.data.error}`, "system");
+            }
+            break;
+
+          case "system/error":
+            if (message.data && message.data.error) {
+              addMessage(`Системная ошибка: ${message.data.error}`, "system");
+            }
+            break;
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -79,6 +79,7 @@ export async function add(player: Omit<Player, "id" | "createdAt">): Promise<Pla
         password: player.password,
         status: player.status,
         settings: player.settings || {},
+        email: player.email,
       })
       .returning(["id", "username", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
       .executeTakeFirst();
@@ -173,5 +174,25 @@ export async function remove(id: string): Promise<boolean> {
   } catch (err) {
     logError(`Ошибка удаления игрока: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return false;
+  }
+}
+export async function getByEmail(email: string): Promise<Player | undefined> {
+  try {
+    const result = await db
+      .selectFrom("players")
+      .select(["id", "username", "email", "password", "created_at as createdAt", "last_login as lastLogin", "status", "settings"])
+      .where("email", "=", email.toLowerCase())
+      .executeTakeFirst();
+
+    if (!result) return undefined;
+
+    return {
+      ...result,
+      createdAt: result.createdAt instanceof Date ? result.createdAt.getTime() : 0,
+      lastLogin: result.lastLogin instanceof Date ? result.lastLogin.getTime() : undefined,
+    } as unknown as Player;
+  } catch (err) {
+    logError(`Ошибка получения игрока по email: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return undefined;
   }
 }

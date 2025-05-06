@@ -20,16 +20,17 @@ export async function initDatabase(): Promise<void> {
       if (!existingTables.includes("players")) {
         log("Создание таблицы players...");
         await sql`
-          CREATE TABLE players (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            username VARCHAR(20) NOT NULL UNIQUE,
-            password VARCHAR(255) NOT NULL,
-            created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-            last_login TIMESTAMP WITH TIME ZONE,
-            status VARCHAR(10) DEFAULT 'offline',
-            settings JSONB DEFAULT '{}'::jsonb
-          )
-        `.execute(trx);
+        CREATE TABLE players (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          username VARCHAR(20) NOT NULL UNIQUE,
+          email VARCHAR(100) NOT NULL UNIQUE, 
+          password VARCHAR(255) NOT NULL,
+          created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+          last_login TIMESTAMP WITH TIME ZONE,
+          status VARCHAR(10) DEFAULT 'offline',
+          settings JSONB DEFAULT '{}'::jsonb
+        )
+      `.execute(trx);
         log("Таблица players успешно создана");
       }
 
@@ -67,6 +68,7 @@ export async function initDatabase(): Promise<void> {
         { name: "idx_chat_messages_type", query: "CREATE INDEX idx_chat_messages_type ON chat_messages(type)" },
         { name: "idx_players_username", query: "CREATE INDEX idx_players_username ON players(username)" },
         { name: "idx_players_status", query: "CREATE INDEX idx_players_status ON players(status)" },
+        { name: "idx_players_email", query: "CREATE INDEX idx_players_email ON players(email)" },
       ];
 
       for (const index of indexes) {

@@ -37,6 +37,7 @@ export interface ChatMessages {
 
 export interface Players {
   created_at: Generated<Timestamp | null>;
+  email: string;
   id: Generated<string>;
   last_login: Timestamp | null;
   password: string;

@@ -1,13 +1,14 @@
 import { Type, TSchema, Static } from "@sinclair/typebox";
 import Ajv from "ajv";
 import addFormats from "ajv-formats";
+import addErrors from "ajv-errors";
 
 // Создаем и настраиваем экземпляр AJV для валидации
 export const ajv = new Ajv({ allErrors: true });
 addFormats(ajv);
-
+addErrors(ajv);
 // Добавляем кастомный формат для регулярного выражения action
-ajv.addFormat("action-format", /^[a-z]+\/[a-z]+$/);
+ajv.addFormat("action-format", /^[a-z]+\/[a-zA-Z0-9]+$/);
 
 // Базовая схема для всех сообщений в формате action/route
 export const messageSchema = Type.Object({

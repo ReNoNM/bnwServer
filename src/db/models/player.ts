@@ -1,15 +1,12 @@
-import { Generated } from "kysely";
-// Импортируем тип Players из сгенерированного файла
-import { Players } from "./database";
-
 export interface Player {
   id: string;
   username: string;
+  email: string;
   password: string;
   createdAt: number;
   lastLogin?: number;
   status: "online" | "offline";
-  settings?: PlayerSettings;
+  settings?: Partial<PlayerSettings>;
 }
 
 export interface PlayerSettings {
@@ -21,6 +18,7 @@ export interface PlayerSettings {
 export interface PlayerDTO {
   id: string;
   username: string;
+  email: string;
   status: "online" | "offline";
   createdAt: number;
   lastLogin?: number;
