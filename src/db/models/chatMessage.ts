@@ -1,4 +1,5 @@
-import { Generated } from "kysely";
+// Импортируем тип ChatMessages из сгенерированного файла
+import { ChatMessages } from "./database";
 
 export enum ChatMessageType {
   REGULAR = "REGULAR",
@@ -44,15 +45,4 @@ export function createSystemMessage(message: string): ChatMessage {
       color: "#ff0000",
     },
   };
-}
-
-// Добавляем интерфейс для таблицы chat_messages в БД (для Kysely)
-export interface ChatMessageTable {
-  id: Generated<string>;
-  sender_id: string;
-  message: string;
-  timestamp: bigint;
-  type: string;
-  receiver_id: string | null;
-  metadata: Record<string, unknown>;
 }
