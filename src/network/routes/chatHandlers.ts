@@ -42,7 +42,7 @@ async function handleSendMessage(ws: WebSocket, data: any): Promise<void> {
     const sanitizedText = escapeHtml(chatText);
 
     // Обрабатываем сообщение
-    const chatMsg = await processChatMessage(playerData.id, sanitizedText, playerData.username);
+    const chatMsg = await processChatMessage(playerData.id, sanitizedText);
 
     if (!chatMsg) {
       sendError(ws, "chat/send", "Сообщение не может быть отправлено");
@@ -58,7 +58,6 @@ async function handleSendMessage(ws: WebSocket, data: any): Promise<void> {
       data: {
         message: {
           ...chatMsg,
-          username: playerData.username,
         },
       },
     });
@@ -89,7 +88,7 @@ async function handleGetHistory(ws: WebSocket, data: any): Promise<void> {
 
     const history = await getChatHistory(limit, before);
 
-    sendMessage(ws, "chat/history", {
+    sendSuccess(ws, "chat/getHistory", {
       messages: history,
     });
   } catch (error) {

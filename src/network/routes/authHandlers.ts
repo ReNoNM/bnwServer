@@ -1,5 +1,13 @@
 import { WebSocket } from "ws";
-import { authenticatePlayer, initiateRegistration, verifyRegistrationCode, completeRegistration } from "../../game/engine/authEngine";
+import {
+  authenticatePlayer,
+  initiateRegistration,
+  verifyRegistrationCode,
+  completeRegistration,
+  initiateResetPassword,
+  verifyRegistrationCodeReset,
+  completeRestorePassword,
+} from "../../game/engine/authEngine";
 import {
   validateMessage,
   loginPayloadSchema,
@@ -7,6 +15,10 @@ import {
   registerEmailPayloadSchema,
   verifyCodePayloadSchema,
   completeRegistrationPayloadSchema,
+  passwordResetRequestPayloadSchema,
+  PasswordResetRequestPayloadSchema,
+  RestorePasswordPayloadSchema,
+  restorePasswordPayloadSchema,
 } from "../middleware/validation";
 import {
   type LoginPayload,
@@ -23,6 +35,7 @@ import { updateClientInfo } from "../socketHandler";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
 import { generateToken, revokeAllUserTokens, revokeToken, validateToken } from "../../utils/tokenUtils";
 import { playerRepository } from "../../db";
+import { tags } from "../../utils/data";
 
 // Обработчик первого шага регистрации (отправка кода на почту)
 async function handleRegisterEmail(ws: WebSocket, data: any): Promise<void> {
@@ -35,6 +48,8 @@ async function handleRegisterEmail(ws: WebSocket, data: any): Promise<void> {
 
     const { email, password } = validation.data;
     log(`Попытка начала регистрации: ${email}`);
+
+    // await new Promise((resolve) => setTimeout(resolve, 5000));
 
     const result = await initiateRegistration(email, password);
 
@@ -94,10 +109,24 @@ async function handleCompleteRegistration(ws: WebSocket, data: any): Promise<voi
       return;
     }
 
-    const { email, username, verificationToken } = validation.data;
+    const { email, username, verificationToken, tagFormat, tagId, tagPosition } = validation.data;
+
+    if (tagPosition !== "start" && tagPosition !== "end") {
+      sendError(ws, "auth/completeRegistration", "Ошибка выбора тега", { details: "tagPosition" });
+      return;
+    }
+    if (tagFormat !== "many" && tagFormat !== "single") {
+      sendError(ws, "auth/completeRegistration", "Ошибка выбора тега", { details: "tagFormat" });
+      return;
+    }
+    if (!tags[tagId - 1]) {
+      sendError(ws, "auth/completeRegistration", "Ошибка выбора тега", { details: "tagId" });
+      return;
+    }
+
     log(`Попытка завершения регистрации: ${email} с именем ${username}`);
 
-    const result = await completeRegistration(email, username, verificationToken);
+    const result = await completeRegistration(email, username, verificationToken, tagPosition, tagFormat, tagId);
 
     if (result.success && result.player) {
       // Сохраняем данные о пользователе в объекте соединения
@@ -267,27 +296,96 @@ async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
 // Обработчик для восстановления пароля (отправка кода)
 async function handlePasswordResetRequest(ws: WebSocket, data: any): Promise<void> {
   try {
-    // Тут должна быть проверка email и отправка кода восстановления
-    // Это просто заглушка для примера
-    sendSuccess(ws, "auth/passwordResetRequest", {
-      message: "Инструкции по восстановлению пароля отправлены на указанный email",
-    });
+    const validation = validateMessage<PasswordResetRequestPayloadSchema>(passwordResetRequestPayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "auth/passwordResetRequest", "Ошибка валидации", { details: validation.errors });
+      return;
+    }
+    const { email } = validation.data;
+
+    const result = await initiateResetPassword(email);
+
+    if (result.success) {
+      sendSuccess(ws, "auth/passwordResetRequest", {
+        email,
+        message: "На указанный email отправлен код подтверждения",
+      });
+      log(`Код подтверждения отправлен: ${email}`);
+    } else {
+      sendError(ws, "auth/passwordResetRequest", result.error || "Неизвестная ошибка");
+      log(`Ошибка сброса пароля: ${result.error}`);
+    }
   } catch (error) {
     handleError(error as Error, "AuthHandlers.passwordResetRequest");
     sendSystemError(ws, "Ошибка при обработке запроса восстановления пароля");
   }
 }
 
-// Обработчик для смены пароля
-async function handlePasswordReset(ws: WebSocket, data: any): Promise<void> {
+async function handleVerifyCodeReset(ws: WebSocket, data: any): Promise<void> {
   try {
-    // Тут должна быть проверка кода и смена пароля
-    // Это просто заглушка для примера
-    sendSuccess(ws, "auth/passwordReset", {
-      message: "Пароль успешно изменен",
-    });
+    const validation = validateMessage<VerifyCodePayload>(verifyCodePayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "auth/verifyCodeReset", "Ошибка валидации", { details: validation.errors });
+      return;
+    }
+
+    const { email, code } = validation.data;
+    log(`Попытка подтверждения кода: ${email}`);
+
+    const result = await verifyRegistrationCodeReset(email, code);
+
+    if (result.success && result.verificationToken) {
+      sendSuccess(ws, "auth/verifyCodeReset", {
+        email,
+        verificationToken: result.verificationToken,
+        message: "Код подтвержден",
+      });
+      log(`Код подтвержден: ${email}`);
+    } else {
+      sendError(ws, "auth/verifyCodeReset", result.error || "Неизвестная ошибка");
+      log(`Ошибка подтверждения кода: ${result.error}`);
+    }
   } catch (error) {
-    handleError(error as Error, "AuthHandlers.passwordReset");
+    handleError(error as Error, "AuthHandlers.verifyCodeReset");
+    sendSystemError(ws, "Ошибка при обработке запроса подтверждения кода");
+  }
+}
+
+// Обработчик для смены пароля
+async function handlePasswordRestore(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const validation = validateMessage<RestorePasswordPayloadSchema>(restorePasswordPayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "auth/passwordRestore", "Ошибка валидации", { details: validation.errors });
+      return;
+    }
+    const { email, password, verificationToken } = validation.data;
+    console.log("🚀 ~ handlePasswordRestore ~ password:", password);
+    const result = await completeRestorePassword(email, password, verificationToken);
+
+    if (result.success && result.player) {
+      // Сохраняем данные о пользователе в объекте соединения
+      (ws as any).playerData = {
+        id: result.player.id,
+        username: result.player.username,
+      };
+
+      // Обновляем информацию о клиенте
+      updateClientInfo(ws, result.player.id, result.player.username);
+
+      addOnlinePlayer(result.player.id);
+
+      sendSuccess(ws, "auth/passwordRestore", {
+        player: result.player,
+        token: result.token,
+        message: "Пароль успешно изменен",
+      });
+    } else {
+      sendError(ws, "auth/passwordRestore", result.error || "Неизвестная ошибка");
+      log(`Ошибка завершения сброса: ${result.error}`);
+    }
+  } catch (error) {
+    handleError(error as Error, "AuthHandlers.passwordRestore");
     sendSystemError(ws, "Ошибка при обработке запроса смены пароля");
   }
 }
@@ -362,5 +460,6 @@ export function registerAuthHandlers(): void {
 
   // Обработчики для восстановления пароля
   registerHandler("auth", "passwordResetRequest", handlePasswordResetRequest);
-  registerHandler("auth", "passwordReset", handlePasswordReset);
+  registerHandler("auth", "verifyCodeReset", handleVerifyCodeReset);
+  registerHandler("auth", "passwordRestore", handlePasswordRestore);
 }

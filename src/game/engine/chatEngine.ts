@@ -1,6 +1,7 @@
 import { chatRepository, playerRepository } from "../../db";
 import { ChatMessage, ChatMessageType } from "../../db/models/chatMessage";
 import config from "../../../config"; // Добавляем импорт
+import { getNick } from "../../utils/helpers";
 
 // Регулярные выражения для фильтрации сообщений
 const PROHIBITED_PATTERNS = [
@@ -9,7 +10,7 @@ const PROHIBITED_PATTERNS = [
 ];
 
 // Обработка сообщения чата
-export async function processChatMessage(senderId: string, message: string, username: string = "Пользователь"): Promise<ChatMessage | null> {
+export async function processChatMessage(senderId: string, message: string): Promise<ChatMessage | null> {
   // Проверка на пустое сообщение
   if (!message || message.trim() === "") {
     return null;
@@ -39,7 +40,7 @@ export async function processChatMessage(senderId: string, message: string, user
       timestamp: Date.now(),
       type: ChatMessageType.REGULAR,
       metadata: {
-        username: username,
+        username: getNick(sender.username, sender.tag, sender.tagPosition),
       },
     };
 

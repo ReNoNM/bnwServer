@@ -156,8 +156,10 @@ export async function update(id: string, updates: Partial<Player>): Promise<bool
     if (updates.lastLogin !== undefined) updateValues.last_login = new Date(updates.lastLogin);
     if (updates.tag !== undefined) updateValues.tag = updates.tag;
     if (updates.tagPosition !== undefined) updateValues.tag_position = updates.tagPosition;
+    if (updates.password !== undefined) updateValues.password = updates.password;
 
     if (Object.keys(updateValues).length === 0) return false;
+    console.log("🚀 ~ update ~ updateValues:", updateValues);
 
     const result = await db.updateTable("players").set(updateValues).where("id", "=", id).returning(["id", "username"]).executeTakeFirst();
 

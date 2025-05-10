@@ -68,11 +68,11 @@ export const verifyCodePayloadSchema = Type.Object({
     },
   }),
   code: Type.String({
-    minLength: 4,
-    maxLength: 10,
+    minLength: 6,
+    maxLength: 6,
     errorMessage: {
-      minLength: "Код должен содержать минимум 4 символа",
-      maxLength: "Код слишком длинный",
+      minLength: "Код должен содержать 6 символов",
+      maxLength: "Код должен содержать 6 символов",
     },
   }),
 });
@@ -87,17 +87,50 @@ export const completeRegistrationPayloadSchema = Type.Object({
   }),
   username: Type.String({
     minLength: 3,
-    maxLength: 20,
-    pattern: "^[a-zA-Z0-9_]+$",
+    maxLength: 30,
+    pattern: "^[\\p{L}\\p{N}_]+$",
     errorMessage: {
       minLength: "Имя пользователя должно содержать минимум 3 символа",
-      maxLength: "Имя пользователя не должно превышать 20 символов",
+      maxLength: "Имя пользователя не должно превышать 30 символов",
       pattern: "Имя пользователя может содержать только буквы, цифры и знак подчеркивания",
     },
   }),
   verificationToken: Type.String(),
+  tagId: Type.Number({
+    minimum: 1,
+    errorMessage: {
+      minimum: "Тег не выбран",
+    },
+  }),
+  tagPosition: Type.String(),
+  tagFormat: Type.String(),
 });
 
+export const passwordResetRequestPayloadSchema = Type.Object({
+  email: Type.String({
+    format: "email",
+    errorMessage: {
+      format: "Некорректный формат почты",
+    },
+  }),
+});
+export const restorePasswordPayloadSchema = Type.Object({
+  email: Type.String({
+    format: "email",
+    errorMessage: {
+      format: "Некорректный формат почты",
+    },
+  }),
+  verificationToken: Type.String(),
+  password: Type.String({
+    minLength: 6,
+    maxLength: 100,
+    errorMessage: {
+      minLength: "Пароль должен содержать минимум 6 символов",
+      maxLength: "Пароль слишком длинный",
+    },
+  }),
+});
 // Типы данных на основе схем
 export type RegisterPayload = Static<typeof registerPayloadSchema>;
 export type LoginPayload = Static<typeof loginPayloadSchema>;
@@ -105,3 +138,5 @@ export type TokenPayload = Static<typeof tokenPayloadSchema>;
 export type RegisterEmailPayload = Static<typeof registerEmailPayloadSchema>;
 export type VerifyCodePayload = Static<typeof verifyCodePayloadSchema>;
 export type CompleteRegistrationPayload = Static<typeof completeRegistrationPayloadSchema>;
+export type PasswordResetRequestPayloadSchema = Static<typeof passwordResetRequestPayloadSchema>;
+export type RestorePasswordPayloadSchema = Static<typeof restorePasswordPayloadSchema>;

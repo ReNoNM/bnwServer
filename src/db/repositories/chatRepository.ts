@@ -95,8 +95,8 @@ export async function getRecent(limit: number = 50): Promise<ChatMessage[]> {
     // Преобразуем и сортируем в хронологическом порядке
     return results
       .map((row) => {
-        const metadata = (row.metadata as Record<string, any>) || {};
-        metadata.username = row.senderUsername;
+        // const metadata = (row.metadata as Record<string, any>) || {};
+        // metadata.username = row.metadata[username] || row.senderUsername;
 
         return {
           senderId: row.senderId,
@@ -104,7 +104,7 @@ export async function getRecent(limit: number = 50): Promise<ChatMessage[]> {
           timestamp: Number(row.timestamp),
           type: row.type as ChatMessageType,
           receiverId: row.receiverId,
-          metadata: metadata,
+          metadata: row.metadata,
         } as ChatMessage;
       })
       .reverse();

@@ -3,7 +3,18 @@ import { hashPassword, verifyPassword } from "../../utils/passwordUtils";
 import { generateToken } from "../../utils/tokenUtils";
 import { log } from "../../utils/logger";
 import { playerRepository } from "../../db";
-import { generateVerificationCode, sendVerificationEmail, verifyCode, generateVerificationToken, verifyToken } from "../../utils/verificationService";
+import {
+  generateVerificationCode,
+  sendVerificationEmail,
+  verifyCode,
+  generateVerificationToken,
+  verifyToken,
+  generatRestoreCode,
+  verifyCodeReset,
+  generateVerificationTokenRestore,
+  verifyTokenRestore,
+} from "../../utils/verificationService";
+import { pluralTags, tags } from "../../utils/data";
 
 // Шаг 1: Инициация регистрации через почту
 export async function initiateRegistration(email: string, password: string): Promise<{ success: boolean; error?: string }> {
@@ -68,14 +79,12 @@ export async function verifyRegistrationCode(email: string, code: string): Promi
 export async function completeRegistration(
   email: string,
   username: string,
-  verificationToken: string
+  verificationToken: string,
+  tagPosition: string,
+  tagFormat: string,
+  tagId: number
 ): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
   try {
-    // Проверка имени пользователя на корректность
-    if (!username || username.length < 3 || username.length > 20) {
-      return { success: false, error: "Имя пользователя должно содержать от 3 до 20 символов" };
-    }
-
     // Проверяем, не занято ли уже имя пользователя
     const existingPlayerByUsername = await playerRepository.getByUsername(username);
     if (existingPlayerByUsername) {
@@ -95,12 +104,16 @@ export async function completeRegistration(
       return { success: false, error: "Внутренняя ошибка сервера: потеря данных аутентификации" };
     }
 
+    const tagName = tagFormat === "single" ? tags[tagId - 1] : pluralTags[tagId - 1];
+    const tag = tagPosition === "end" ? tagName.toLowerCase() : tagName;
     // Создаем нового игрока
     const newPlayer = await playerRepository.add({
       username,
       email,
       password: hashedPassword,
       status: "online",
+      tag,
+      tagPosition,
     });
 
     if (!newPlayer) {
@@ -161,5 +174,95 @@ export async function authenticatePlayer(
   } catch (error) {
     log(`Ошибка при аутентификации игрока: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);
     return { success: false, error: "Ошибка при аутентификации" };
+  }
+}
+
+export async function initiateResetPassword(email: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    // Проверяем, не занят ли уже email
+    const existingPlayer = await playerRepository.getByEmail(email);
+    if (!existingPlayer) {
+      return { success: false, error: "Email не зарегистрирован" };
+    }
+
+    // Генерация кода подтверждения
+    const code = generatRestoreCode(email);
+
+    // Отправка кода на почту (в данном случае - заглушка)
+    if (!sendVerificationEmail(email, code)) {
+      return { success: false, error: "Не удалось отправить код подтверждения" };
+    }
+
+    return { success: true };
+  } catch (error) {
+    log(`Ошибка при инициации регистрации: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);
+    return { success: false, error: "Ошибка при инициации регистрации" };
+  }
+}
+
+export async function verifyRegistrationCodeReset(
+  email: string,
+  code: string
+): Promise<{ success: boolean; verificationToken?: string; error?: string }> {
+  try {
+    // Проверка кода
+    const verification = verifyCodeReset(email, code);
+    if (!verification.success) {
+      return { success: false, error: "Неверный или истекший код подтверждения" };
+    }
+
+    // Получение токена для завершения регистрации
+    const verificationToken = generateVerificationTokenRestore(email);
+
+    return { success: true, verificationToken };
+  } catch (error) {
+    log(`Ошибка при проверке кода подтверждения: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);
+    return { success: false, error: "Ошибка при проверке кода подтверждения" };
+  }
+}
+
+export async function completeRestorePassword(
+  email: string,
+  password: string,
+  verificationToken: string
+): Promise<{ success: boolean; player?: Omit<Player, "password">; token?: string; error?: string }> {
+  try {
+    // Проверка токена верификации
+    const verification = verifyTokenRestore(verificationToken);
+    if (!verification.valid || verification.email !== email) {
+      return { success: false, error: "Недействительный токен верификации" };
+    }
+
+    // Проверяем, не занято ли уже имя пользователя
+    const existingPlayer = await playerRepository.getByEmail(email);
+    if (!existingPlayer) {
+      return { success: false, error: "Пользователь не найден" };
+    }
+
+    const hashedPassword = hashPassword(password);
+
+    if (!hashedPassword) {
+      log(`ОШИБКА: Пустой хешированный пароль для ${email} при завершении регистрации`, true);
+      return { success: false, error: "Внутренняя ошибка сервера: потеря данных аутентификации" };
+    }
+
+    await playerRepository.update(existingPlayer.id, {
+      password: hashedPassword,
+      status: "online",
+    });
+
+    // Создаем токен для авторизации
+    const token = await generateToken(existingPlayer.id);
+
+    // Логируем успешную регистрацию
+    log(`Игрок сбросил пароль: ${existingPlayer.username}`);
+
+    // Не отправляем пароль клиенту
+    const { password: _, ...playerWithoutPassword } = existingPlayer;
+
+    return { success: true, player: playerWithoutPassword, token };
+  } catch (error) {
+    log(`Ошибка при сбросе: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`, true);
+    return { success: false, error: "Ошибка при завершении сброса" };
   }
 }

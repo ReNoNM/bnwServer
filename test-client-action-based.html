@@ -315,7 +315,7 @@
                   addMessage(`Failed to send message: ${message.data.error}`, "system");
                   break;
 
-                case "chat/history":
+                case "chat/getHistory":
                   // Сначала очищаем историю
                   messagesDiv.innerHTML = "";
                   addMessage("Chat history:", "system");

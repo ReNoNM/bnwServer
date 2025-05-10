@@ -4,8 +4,8 @@ export interface Player {
   username: string;
   email: string;
   password: string;
-  tag?: string; // Добавлено новое поле tag
-  tagPosition?: string; // Добавлено новое поле tagPosition
+  tag: string; // Добавлено новое поле tag
+  tagPosition: string; // Добавлено новое поле tagPosition
   createdAt: number;
   lastLogin?: number;
   status: "online" | "offline";
