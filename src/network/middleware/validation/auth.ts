@@ -4,11 +4,11 @@ import { Type, Static } from "@sinclair/typebox";
 export const registerPayloadSchema = Type.Object({
   username: Type.String({
     minLength: 3,
-    maxLength: 20,
+    maxLength: 30,
     pattern: "^[a-zA-Z0-9_]+$",
     errorMessage: {
       minLength: "Имя пользователя должно содержать минимум 3 символа",
-      maxLength: "Имя пользователя не должно превышать 20 символов",
+      maxLength: "Имя пользователя не должно превышать 30 символов",
       pattern: "Имя пользователя может содержать только буквы, цифры и знак подчеркивания",
     },
   }),
