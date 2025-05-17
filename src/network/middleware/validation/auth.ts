@@ -88,11 +88,11 @@ export const completeRegistrationPayloadSchema = Type.Object({
   username: Type.String({
     minLength: 3,
     maxLength: 30,
-    pattern: "^[\\p{L}\\p{N}_]+$",
+    pattern: "^[\\p{L}\\p{N} _-]+$",
     errorMessage: {
       minLength: "Имя пользователя должно содержать минимум 3 символа",
       maxLength: "Имя пользователя не должно превышать 30 символов",
-      pattern: "Имя пользователя может содержать только буквы, цифры и знак подчеркивания",
+      pattern: "Имя пользователя может содержать только буквы, цифры, пробел и знак подчеркивания",
     },
   }),
   verificationToken: Type.String(),
