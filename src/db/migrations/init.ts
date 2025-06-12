@@ -77,6 +77,48 @@ const tables: TableDefinition[] = [
       { name: "idx_tokens_revoked", columns: "revoked" },
     ],
   },
+  {
+    name: "worlds",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "name", type: "VARCHAR(100)", constraints: "NOT NULL" },
+      { name: "size_x", type: "INTEGER", constraints: "NOT NULL DEFAULT 50" },
+      { name: "size_y", type: "INTEGER", constraints: "NOT NULL DEFAULT 50" },
+      { name: "world_type", type: "VARCHAR(50)", constraints: "NOT NULL DEFAULT 'standard'" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "settings", type: "JSONB", defaultValue: "'{}'::jsonb" },
+    ],
+    indexes: [
+      { name: "idx_worlds_name", columns: "name" },
+      { name: "idx_worlds_type", columns: "world_type" },
+      { name: "idx_worlds_created_at", columns: "created_at" },
+    ],
+  },
+  {
+    name: "map",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "world_id", type: "UUID", constraints: "NOT NULL REFERENCES worlds(id) ON DELETE CASCADE" },
+      { name: "x", type: "INTEGER", constraints: "NOT NULL" },
+      { name: "y", type: "INTEGER", constraints: "NOT NULL" },
+      { name: "type", type: "VARCHAR(50)", constraints: "NOT NULL DEFAULT 'plain'" },
+      { name: "type_id", type: "INTEGER", constraints: "NOT NULL DEFAULT 0" },
+      { name: "label", type: "VARCHAR(100)", defaultValue: "''" },
+      { name: "metadata", type: "JSONB", defaultValue: "'{}'::jsonb" },
+    ],
+    constraints: [
+      "UNIQUE(world_id, x, y)", // Уникальная комбинация мира и координат
+    ],
+    indexes: [
+      { name: "idx_map_world_id", columns: "world_id" },
+      { name: "idx_map_coordinates", columns: ["world_id", "x", "y"], unique: true },
+      { name: "idx_map_type", columns: "type" },
+      { name: "idx_map_type_id", columns: "type_id" },
+      { name: "idx_map_x", columns: "x" },
+      { name: "idx_map_y", columns: "y" },
+    ],
+  },
 ];
 
 // Функция для выполнения начальных миграций базы данных

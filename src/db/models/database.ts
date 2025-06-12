@@ -35,6 +35,17 @@ export interface ChatMessages {
   type: string;
 }
 
+export interface Map {
+  id: Generated<string>;
+  label: Generated<string | null>;
+  metadata: Generated<Json | null>;
+  type: string;
+  type_id: number;
+  world_id: string;
+  x: number;
+  y: number;
+}
+
 export interface Players {
   created_at: Generated<Timestamp | null>;
   email: string;
@@ -58,8 +69,21 @@ export interface Tokens {
   user_id: string;
 }
 
+export interface Worlds {
+  created_at: Generated<Timestamp | null>;
+  id: Generated<string>;
+  name: string;
+  settings: Generated<Json | null>;
+  size_x: number;
+  size_y: number;
+  updated_at: Generated<Timestamp | null>;
+  world_type: string;
+}
+
 export interface DB {
   chat_messages: ChatMessages;
+  map: Map;
   players: Players;
   tokens: Tokens;
+  worlds: Worlds;
 }
