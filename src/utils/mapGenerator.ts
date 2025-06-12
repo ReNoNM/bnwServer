@@ -176,8 +176,33 @@ export function generateMap({
   function placeArea(area: Area): boolean {
     let attempts = 0;
     while (attempts++ < maxPlacementAttempts) {
-      let startX = area.isSide ? (["top", "bottom"].includes(getSide()) ? getRandomInt(0, mapSize - 1) : 0) : getRandomInt(0, mapSize - 1);
-      let startY = area.isSide ? (["left", "right"].includes(getSide()) ? getRandomInt(0, mapSize - 1) : 0) : getRandomInt(0, mapSize - 1);
+      let startX, startY;
+
+      if (area.isSide) {
+        const side = getSide();
+
+        switch (side) {
+          case "top":
+            startX = 0;
+            startY = getRandomInt(0, mapSize - 1);
+            break;
+          case "bottom":
+            startX = mapSize - 1;
+            startY = getRandomInt(0, mapSize - 1);
+            break;
+          case "left":
+            startX = getRandomInt(0, mapSize - 1);
+            startY = 0;
+            break;
+          case "right":
+            startX = getRandomInt(0, mapSize - 1);
+            startY = mapSize - 1;
+            break;
+        }
+      } else {
+        startX = getRandomInt(0, mapSize - 1);
+        startY = getRandomInt(0, mapSize - 1);
+      }
 
       const areaSize = getRandomInt(area.size[0], area.size[1]);
       const cells = new Set<string>();
@@ -187,8 +212,10 @@ export function generateMap({
         const idx = getRandomInt(0, frontier.length - 1);
         const [x, y] = frontier.splice(idx, 1)[0];
         const key = `${x},${y}`;
-        if (!cells.has(key)) {
+
+        if (!cells.has(key) && x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
           cells.add(key);
+
           shuffle([
             [x + 1, y],
             [x - 1, y],
@@ -204,10 +231,18 @@ export function generateMap({
       }
 
       const coordCells: [number, number][] = [...cells].map((str) => str.split(",").map(Number) as [number, number]);
+
       if (coordCells.length === areaSize && isValidPlacement(coordCells)) {
         coordCells.forEach(([x, y]) => {
-          map[x][y] = { type: area.className, label: area.name, x: y, y: x, locationId: area.locationId };
+          map[x][y] = {
+            type: area.className,
+            label: area.name,
+            x: y,
+            y: x,
+            locationId: area.locationId,
+          };
         });
+
         stats[area.name] = stats[area.name] || { count: 0, cells: 0 };
         stats[area.name].count += 1;
         stats[area.name].cells += coordCells.length;
@@ -216,7 +251,6 @@ export function generateMap({
     }
     return false;
   }
-
   for (const area of sortedAreas) {
     if (!area.isArea) continue;
 

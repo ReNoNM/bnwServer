@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Просмотр карты мира</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background-color: #f0f0f0;
+      }
+      .container {
+        max-width: 1400px;
+        margin: 0 auto;
+      }
+      .control-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .worlds-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .map-container {
+        background: white;
+        padding: 20px;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        overflow: auto;
+        max-height: 80vh;
+      }
+      .map-grid {
+        display: grid;
+        gap: 1px;
+        background-color: #333;
+        border: 2px solid #333;
+        margin: 20px 0;
+      }
+      .tile {
+        width: 24px;
+        height: 24px;
+        border: none;
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 12px;
+        font-weight: bold;
+        color: #333;
+        text-shadow: 1px 1px 1px rgba(255, 255, 255, 0.8);
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      .tile:hover {
+        outline: 2px solid #ff0000;
+        z-index: 10;
+        transform: scale(1.1);
+      }
+      .tile.dimmed {
+        opacity: 0.3;
+        filter: grayscale(70%);
+      }
+      .tile.highlighted {
+        opacity: 1;
+        filter: none;
+        outline: 2px solid #ffd700;
+        box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+      }
+
+      /* Стили для разных типов локаций */
+      .plain {
+        background-color: #90ee90;
+        color: #2d5a2d;
+      }
+      .hill {
+        background-color: #d2b48c;
+        color: #5a4a3a;
+      }
+      .lake {
+        background-color: #4169e1;
+        color: #ffffff;
+      }
+      .forest {
+        background-color: #228b22;
+        color: #ffffff;
+      }
+      .garden {
+        background-color: #ffb6c1;
+        color: #8b0040;
+      }
+      .mountain {
+        background-color: #696969;
+        color: #ffffff;
+      }
+      .wild_forest {
+        background-color: #006400;
+        color: #ffffff;
+      }
+      .spring {
+        background-color: #00ced1;
+        color: #ffffff;
+      }
+      .volcano {
+        background-color: #ff4500;
+        color: #ffffff;
+      }
+      .lagoon {
+        background-color: #20b2aa;
+        color: #ffffff;
+      }
+      .desert {
+        background-color: #f4a460;
+        color: #8b4513;
+      }
+      .primeval_forest {
+        background-color: #2f4f2f;
+        color: #ffffff;
+      }
+      .swamp {
+        background-color: #556b2f;
+        color: #ffffff;
+      }
+      .sea {
+        background-color: #000080;
+        color: #ffffff;
+      }
+      .canyon {
+        background-color: #8b4513;
+        color: #ffffff;
+      }
+      .rift {
+        background-color: #800080;
+        color: #ffffff;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+      }
+      .stat-item {
+        background: #f8f9fa;
+        padding: 10px;
+        border-radius: 4px;
+        border-left: 4px solid #007bff;
+      }
+      .legend {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 8px;
+        margin: 20px 0;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+      .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 13px;
+        padding: 8px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border: 2px solid transparent;
+      }
+      .legend-item:hover {
+        background: #e9ecef;
+        transform: translateY(-1px);
+      }
+      .legend-item.active {
+        background: #e3f2fd;
+        border-color: #2196f3;
+        box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+      }
+      .legend-color {
+        width: 20px;
+        height: 20px;
+        border: 1px solid #333;
+        border-radius: 2px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 10px;
+        font-weight: bold;
+        flex-shrink: 0;
+      }
+      .legend-text {
+        flex: 1;
+      }
+      .legend-count {
+        font-size: 11px;
+        color: #666;
+        background: #dee2e6;
+        padding: 2px 6px;
+        border-radius: 10px;
+        min-width: 20px;
+        text-align: center;
+      }
+      button {
+        background: #007bff;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-right: 10px;
+        margin-bottom: 10px;
+      }
+      button:hover {
+        background: #0056b3;
+      }
+      button:disabled {
+        background: #ccc;
+        cursor: not-allowed;
+      }
+      .filter-controls {
+        margin: 10px 0;
+        padding: 10px;
+        background: #f8f9fa;
+        border-radius: 4px;
+      }
+      .status {
+        padding: 10px;
+        border-radius: 4px;
+        margin: 10px 0;
+      }
+      .status.connected {
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+      }
+      .status.disconnected {
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+      }
+      .tooltip {
+        position: absolute;
+        background: rgba(0, 0, 0, 0.9);
+        color: white;
+        padding: 8px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        pointer-events: none;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+      }
+      .worlds-list {
+        max-height: 200px;
+        overflow-y: auto;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin: 10px 0;
+      }
+      .world-item {
+        padding: 10px;
+        border-bottom: 1px solid #eee;
+        cursor: pointer;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .world-item:hover {
+        background-color: #f8f9fa;
+      }
+      .world-item.selected {
+        background-color: #e3f2fd;
+        border-left: 4px solid #2196f3;
+      }
+      .world-info {
+        flex: 1;
+      }
+      .world-name {
+        font-weight: bold;
+        margin-bottom: 4px;
+      }
+      .world-details {
+        font-size: 12px;
+        color: #666;
+      }
+      input,
+      select {
+        padding: 8px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        margin-right: 10px;
+      }
+      .map-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 15px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Просмотр карты мира</h1>
+
+      <div class="control-panel">
+        <div>
+          <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="WebSocket URL" style="width: 200px" />
+          <button id="connectBtn">Подключиться</button>
+          <button id="disconnectBtn" disabled>Отключиться</button>
+        </div>
+
+        <div id="connectionStatus" class="status disconnected">Отключено</div>
+
+        <div>
+          <button id="createWorldBtn" disabled>Создать новый мир</button>
+          <button id="generateMapBtn" disabled>Сгенерировать карту (тест)</button>
+        </div>
+      </div>
+
+      <div class="worlds-panel">
+        <h3>Существующие миры:</h3>
+        <button id="refreshWorldsBtn" disabled>Обновить список</button>
+        <div class="worlds-list" id="worldsList">
+          <p>Подключитесь к серверу для загрузки списка миров</p>
+        </div>
+        <button id="loadWorldBtn" disabled>Загрузить выбранный мир</button>
+      </div>
+
+      <div class="map-container">
+        <div class="map-controls">
+          <h3 style="margin: 0">Легенда (кликните для фильтрации):</h3>
+          <button id="clearFilterBtn" style="padding: 6px 12px; font-size: 12px">Показать всё</button>
+        </div>
+
+        <div class="legend" id="legend">
+          <!-- Легенда будет заполнена динамически -->
+        </div>
+
+        <div id="mapDisplay">
+          <p>Карта не загружена. Выберите мир из списка и нажмите "Загрузить выбранный мир".</p>
+        </div>
+
+        <div class="stats" id="mapStats"></div>
+      </div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+      let socket = null;
+      let currentMap = null;
+      let worlds = [];
+      let selectedWorldId = null;
+      let activeFilters = new Set();
+      let mapStats = {};
+
+      // Функция получения первой буквы названия
+      function getFirstLetter(label) {
+        if (!label) return "";
+        // Убираем артикли и получаем первую букву основного слова
+        const words = label.split(" ");
+        const mainWord = words.find((word) => !["и", "в", "на", "с", "по", "для", "от", "до", "из"].includes(word.toLowerCase())) || words[0];
+        return mainWord.charAt(0).toUpperCase();
+      }
+
+      // Определение типов локаций с их русскими названиями
+      const locationTypes = {
+        plain: "Равнина",
+        hill: "Холм",
+        lake: "Озеро",
+        forest: "Лес",
+        garden: "Лекарственные сады",
+        mountain: "Духовные горы",
+        wild_forest: "Дикий лес",
+        spring: "Духовный источник",
+        volcano: "Долина вулканов",
+        lagoon: "Лагуна умиротворения",
+        desert: "Пески забвения",
+        primeval_forest: "Первобытный лес",
+        swamp: "Болота смерти",
+        sea: "Безграничное море",
+        canyon: "Каньон уныния",
+        rift: "Разлом демонов",
+      };
+
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const createWorldBtn = document.getElementById("createWorldBtn");
+      const generateMapBtn = document.getElementById("generateMapBtn");
+      const refreshWorldsBtn = document.getElementById("refreshWorldsBtn");
+      const loadWorldBtn = document.getElementById("loadWorldBtn");
+      const clearFilterBtn = document.getElementById("clearFilterBtn");
+      const serverUrlInput = document.getElementById("serverUrl");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const worldsList = document.getElementById("worldsList");
+      const mapDisplay = document.getElementById("mapDisplay");
+      const mapStatsDiv = document.getElementById("mapStats");
+      const legend = document.getElementById("legend");
+      const tooltip = document.getElementById("tooltip");
+
+      // Подключение к серверу
+      connectBtn.addEventListener("click", () => {
+        const url = serverUrlInput.value;
+        try {
+          socket = new WebSocket(url);
+
+          socket.onopen = () => {
+            connectionStatus.textContent = "Подключено";
+            connectionStatus.className = "status connected";
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            createWorldBtn.disabled = false;
+            generateMapBtn.disabled = false;
+            refreshWorldsBtn.disabled = false;
+
+            loadWorldsList();
+          };
+
+          socket.onclose = () => {
+            connectionStatus.textContent = "Отключено";
+            connectionStatus.className = "status disconnected";
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            createWorldBtn.disabled = true;
+            generateMapBtn.disabled = true;
+            refreshWorldsBtn.disabled = true;
+            loadWorldBtn.disabled = true;
+          };
+
+          socket.onmessage = (event) => {
+            try {
+              const message = JSON.parse(event.data);
+              handleServerMessage(message);
+            } catch (e) {
+              console.error("Ошибка парсинга сообщения:", e);
+            }
+          };
+
+          socket.onerror = (error) => {
+            console.error("WebSocket ошибка:", error);
+          };
+        } catch (error) {
+          console.error("Ошибка подключения:", error);
+        }
+      });
+
+      disconnectBtn.addEventListener("click", () => {
+        if (socket) {
+          socket.close();
+        }
+      });
+
+      createWorldBtn.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "system/createWorld",
+            })
+          );
+        }
+      });
+
+      generateMapBtn.addEventListener("click", () => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "system/map",
+            })
+          );
+        }
+      });
+
+      refreshWorldsBtn.addEventListener("click", loadWorldsList);
+
+      loadWorldBtn.addEventListener("click", () => {
+        if (selectedWorldId && socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "system/loadWorldMap",
+              data: { worldId: selectedWorldId },
+            })
+          );
+        }
+      });
+
+      clearFilterBtn.addEventListener("click", clearFilters);
+
+      function loadWorldsList() {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "system/getWorlds",
+            })
+          );
+        }
+      }
+
+      function handleServerMessage(message) {
+        console.log("Получено сообщение:", message);
+
+        switch (message.action) {
+          case "system/createWorldSuccess":
+            console.log("Мир создан:", message.data);
+            loadWorldsList();
+            break;
+
+          case "system/mapSuccess":
+            if (message.data && message.data.map) {
+              displayMap(message.data.map, message.data.stats, "Сгенерированная карта (тест)");
+            }
+            break;
+
+          case "system/getWorldsSuccess":
+            if (message.data && message.data.worlds) {
+              displayWorldsList(message.data.worlds);
+            }
+            break;
+
+          case "system/loadWorldMapSuccess":
+            if (message.data && message.data.map) {
+              const worldName = message.data.world ? message.data.world.name : "Неизвестный мир";
+              displayMap(message.data.map, message.data.stats, `Карта мира: ${worldName}`);
+            }
+            break;
+
+          case "system/createWorldFailed":
+          case "system/mapFailed":
+          case "system/getWorldsFailed":
+          case "system/loadWorldMapFailed":
+            console.error("Ошибка:", message.data.error);
+            alert("Ошибка: " + message.data.error);
+            break;
+        }
+      }
+
+      function displayWorldsList(worldsData) {
+        worlds = worldsData;
+        worldsList.innerHTML = "";
+
+        if (worlds.length === 0) {
+          worldsList.innerHTML = "<p>Нет созданных миров. Создайте новый мир.</p>";
+          return;
+        }
+
+        worlds.forEach((world) => {
+          const worldDiv = document.createElement("div");
+          worldDiv.className = "world-item";
+          worldDiv.dataset.worldId = world.id;
+
+          const createdDate = new Date(world.createdAt).toLocaleString("ru-RU");
+
+          worldDiv.innerHTML = `
+                    <div class="world-info">
+                        <div class="world-name">${world.name}</div>
+                        <div class="world-details">
+                            Размер: ${world.sizeX}x${world.sizeY} | 
+                            Тип: ${world.worldType} | 
+                            Создан: ${createdDate}
+                        </div>
+                    </div>
+                `;
+
+          worldDiv.addEventListener("click", () => selectWorld(world.id));
+          worldsList.appendChild(worldDiv);
+        });
+      }
+
+      function selectWorld(worldId) {
+        selectedWorldId = worldId;
+
+        document.querySelectorAll(".world-item").forEach((item) => {
+          item.classList.remove("selected");
+        });
+
+        const selectedItem = document.querySelector(`[data-world-id="${worldId}"]`);
+        if (selectedItem) {
+          selectedItem.classList.add("selected");
+          loadWorldBtn.disabled = false;
+        }
+      }
+
+      function displayMap(mapData, stats, title = "Карта мира") {
+        currentMap = mapData;
+        mapStats = stats || {};
+        activeFilters.clear();
+
+        const mapSize = mapData.length;
+
+        mapDisplay.innerHTML = `
+                <h3>${title} (${mapSize}x${mapSize})</h3>
+                <div class="map-grid" id="mapGrid" style="grid-template-columns: repeat(${mapSize}, 24px);"></div>
+            `;
+
+        const mapGrid = document.getElementById("mapGrid");
+
+        for (let x = 0; x < mapSize; x++) {
+          for (let y = 0; y < mapSize; y++) {
+            const tile = mapData[x][y];
+            const tileElement = document.createElement("div");
+            const label = tile.label || locationTypes[tile.type] || tile.type;
+            const firstLetter = getFirstLetter(label);
+
+            tileElement.className = `tile ${tile.type}`;
+            tileElement.textContent = firstLetter;
+            tileElement.dataset.x = x;
+            tileElement.dataset.y = y;
+            tileElement.dataset.type = tile.type;
+            tileElement.dataset.label = label;
+
+            tileElement.addEventListener("mouseenter", showTooltip);
+            tileElement.addEventListener("mouseleave", hideTooltip);
+            tileElement.addEventListener("mousemove", moveTooltip);
+
+            mapGrid.appendChild(tileElement);
+          }
+        }
+
+        displayLegend(stats);
+        displayStats(stats);
+      }
+
+      function displayLegend(stats) {
+        legend.innerHTML = "";
+
+        // Получаем уникальные типы с карты
+        const typeCounts = {};
+        if (currentMap) {
+          for (let x = 0; x < currentMap.length; x++) {
+            for (let y = 0; y < currentMap[x].length; y++) {
+              const tile = currentMap[x][y];
+              const type = tile.type;
+              const label = tile.label || locationTypes[type] || type;
+              if (!typeCounts[type]) {
+                typeCounts[type] = { count: 0, label: label };
+              }
+              typeCounts[type].count++;
+            }
+          }
+        }
+
+        Object.entries(typeCounts).forEach(([type, data]) => {
+          const legendItem = document.createElement("div");
+          legendItem.className = "legend-item";
+          legendItem.dataset.type = type;
+
+          const firstLetter = getFirstLetter(data.label);
+
+          legendItem.innerHTML = `
+                    <div class="legend-color ${type}">${firstLetter}</div>
+                    <div class="legend-text">${data.label}</div>
+                    <div class="legend-count">${data.count}</div>
+                `;
+
+          legendItem.addEventListener("click", () => toggleFilter(type));
+          legend.appendChild(legendItem);
+        });
+      }
+
+      function toggleFilter(type) {
+        if (activeFilters.has(type)) {
+          activeFilters.delete(type);
+        } else {
+          activeFilters.add(type);
+        }
+
+        updateLegendDisplay();
+        updateMapDisplay();
+      }
+
+      function clearFilters() {
+        activeFilters.clear();
+        updateLegendDisplay();
+        updateMapDisplay();
+      }
+
+      function updateLegendDisplay() {
+        document.querySelectorAll(".legend-item").forEach((item) => {
+          const type = item.dataset.type;
+          if (activeFilters.has(type)) {
+            item.classList.add("active");
+          } else {
+            item.classList.remove("active");
+          }
+        });
+      }
+
+      function updateMapDisplay() {
+        document.querySelectorAll(".tile").forEach((tile) => {
+          const type = tile.dataset.type;
+
+          if (activeFilters.size === 0) {
+            // Если фильтры не активны - показываем все
+            tile.classList.remove("dimmed", "highlighted");
+          } else if (activeFilters.has(type)) {
+            // Если тип в активных фильтрах - подсвечиваем
+            tile.classList.remove("dimmed");
+            tile.classList.add("highlighted");
+          } else {
+            // Если тип не в активных фильтрах - затемняем
+            tile.classList.remove("highlighted");
+            tile.classList.add("dimmed");
+          }
+        });
+      }
+
+      function displayStats(stats) {
+        if (!stats) return;
+
+        mapStatsDiv.innerHTML = "<h3>Статистика карты:</h3>";
+
+        Object.entries(stats).forEach(([name, data]) => {
+          const statDiv = document.createElement("div");
+          statDiv.className = "stat-item";
+          statDiv.innerHTML = `
+                    <strong>${name}</strong><br>
+                    Количество: ${data.count}<br>
+                    Клеток: ${data.cells}
+                `;
+          mapStatsDiv.appendChild(statDiv);
+        });
+      }
+
+      function showTooltip(event) {
+        const tile = event.target;
+        const x = tile.dataset.x;
+        const y = tile.dataset.y;
+        const type = tile.dataset.type;
+        const label = tile.dataset.label;
+
+        tooltip.innerHTML = `
+                <strong>${label}</strong><br>
+                Координаты: ${x}, ${y}<br>
+                Тип: ${type}
+            `;
+        tooltip.style.display = "block";
+        moveTooltip(event);
+      }
+
+      function hideTooltip() {
+        tooltip.style.display = "none";
+      }
+
+      function moveTooltip(event) {
+        tooltip.style.left = event.pageX + 10 + "px";
+        tooltip.style.top = event.pageY - 10 + "px";
+      }
+    </script>
+  </body>
+</html>
