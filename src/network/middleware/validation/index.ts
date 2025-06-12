@@ -1,15 +1,15 @@
 // Экспортируем базовую логику валидации
-export * from './core';
+export * from "./core";
 
 // Экспортируем схемы и типы аутентификации
-export * from './auth';
+export * from "./auth";
 
 // Экспортируем схемы и типы чата
-export * from './chat';
+export * from "./chat";
 
 // Экспортируем схемы и типы системных сообщений
-export * from './system';
-
+export * from "./system";
+export * from "./map";
 // Здесь можно добавить экспорт других модулей валидации по мере их появления
 // export * from './game';
 // export * from './player';

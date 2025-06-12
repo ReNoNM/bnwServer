@@ -26,6 +26,7 @@ const requiresAuth: Record<string, boolean> = {
   chat: true, // Для чата требуется авторизация
   player: true, // Маршруты игрока требуют авторизацию
   system: false, // Системные маршруты (пинг, статус) не требуют авторизации
+  map: false,
 };
 
 // Диспетчер сообщений

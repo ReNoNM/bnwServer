@@ -60,3 +60,51 @@ export async function addTiles(tiles: Omit<MapTile, "id">[]): Promise<boolean> {
     return false;
   }
 }
+export async function getRegion(worldId: string, startX: number, startY: number, endX: number, endY: number): Promise<MapTile[]> {
+  try {
+    const results = await db
+      .selectFrom("map")
+      .select(["id", "world_id as worldId", "x", "y", "type", "type_id as typeId", "label", "metadata"])
+      .where("world_id", "=", worldId)
+      .where("x", ">=", startX)
+      .where("x", "<=", endX)
+      .where("y", ">=", startY)
+      .where("y", "<=", endY)
+      .orderBy("y")
+      .orderBy("x")
+      .execute();
+
+    return results as MapTile[];
+  } catch (err) {
+    logError(`Ошибка получения области карты: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return [];
+  }
+}
+
+// Получение конкретных тайлов по координатам
+export async function getTilesByCoordinates(worldId: string, coordinates: { x: number; y: number }[]): Promise<MapTile[]> {
+  try {
+    if (coordinates.length === 0) {
+      return [];
+    }
+
+    // Строим запрос с множественными условиями OR
+    let query = db
+      .selectFrom("map")
+      .select(["id", "world_id as worldId", "x", "y", "type", "type_id as typeId", "label", "metadata"])
+      .where("world_id", "=", worldId);
+
+    // Добавляем условия для каждой координаты
+    query = query.where((eb) => {
+      const conditions = coordinates.map((coord) => eb.and([eb("x", "=", coord.x), eb("y", "=", coord.y)]));
+      return eb.or(conditions);
+    });
+
+    const results = await query.orderBy("y").orderBy("x").execute();
+
+    return results as MapTile[];
+  } catch (err) {
+    logError(`Ошибка получения тайлов по координатам: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return [];
+  }
+}

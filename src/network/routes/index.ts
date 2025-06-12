@@ -1,7 +1,8 @@
 import { registerAuthHandlers } from "./authHandlers";
 import { registerChatHandlers } from "./chatHandlers";
-import { log } from "../../utils/logger";
 import { registerSystemHandlers } from "./systemHandlers";
+import { registerMapHandlers } from "./mapHandlers";
+import { log } from "../../utils/logger";
 
 // Регистрация всех обработчиков маршрутов
 export function registerAllHandlers(): void {
@@ -12,8 +13,12 @@ export function registerAllHandlers(): void {
 
   // Регистрация обработчиков чата
   registerChatHandlers();
+
+  // Регистрация системных обработчиков
   registerSystemHandlers();
-  // Здесь можно добавить регистрацию других обработчиков
+
+  // Регистрация обработчиков карты
+  registerMapHandlers(); // Новая регистрация
 
   log("Все обработчики маршрутов зарегистрированы");
 }
