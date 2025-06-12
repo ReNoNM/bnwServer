@@ -153,7 +153,7 @@ export function generateMap({
     Array.from({ length: mapSize }, (_, col) => ({
       locationId: 0,
       type: "plain",
-      label: "",
+      label: "Равнина",
       x: col,
       y: row,
     }))
