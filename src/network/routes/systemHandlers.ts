@@ -4,6 +4,7 @@ import { registerHandler } from "../messageDispatcher";
 import { sendMessage } from "../../utils/websocketUtils";
 import { clients } from "../socketHandler";
 import { log } from "../../utils/logger";
+import { generateMap } from "../../utils/mapGenerator";
 
 // Обработчик пинга
 function handlePing(ws: WebSocket, data: any): void {
@@ -21,8 +22,15 @@ function handlePong(ws: WebSocket, data: any): void {
     log(`Pong получен от клиента ${clientInfo.username || clientInfo.id || "неизвестный пользователь"}`);
   }
 }
+
+function handleMap(ws: WebSocket, data: any): void {
+  const map = generateMap();
+  console.log("🚀 ~ handleMap ~ map:", JSON.parse(JSON.stringify(map.map)));
+  console.log(map.stats);
+}
 // Регистрация обработчиков системных сообщений
 export function registerSystemHandlers(): void {
   registerHandler("system", "ping", handlePing);
   registerHandler("system", "pong", handlePong);
+  registerHandler("system", "map", handleMap);
 }
