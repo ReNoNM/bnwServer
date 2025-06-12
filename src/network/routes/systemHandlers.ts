@@ -242,10 +242,10 @@ async function handleLoadWorldMap(ws: WebSocket, data: any): Promise<void> {
 
     // Преобразуем тайлы в двумерную карту
     const mapGrid: any = [];
-    for (let x = 0; x < world.sizeX; x++) {
-      mapGrid[x] = [];
-      for (let y = 0; y < world.sizeY; y++) {
-        mapGrid[x][y] = {
+    for (let y = 0; y < world.sizeY; y++) {
+      mapGrid[y] = [];
+      for (let x = 0; x < world.sizeX; x++) {
+        mapGrid[y][x] = {
           locationId: 0,
           type: "plain",
           label: "Равнина",
@@ -258,7 +258,7 @@ async function handleLoadWorldMap(ws: WebSocket, data: any): Promise<void> {
     // Заполняем карту данными из базы
     mapTiles.forEach((tile) => {
       if (tile.x < world.sizeX && tile.y < world.sizeY) {
-        mapGrid[tile.x][tile.y] = {
+        mapGrid[tile.y][tile.x] = {
           locationId: tile.typeId,
           type: tile.type,
           label: tile.label || tile.type,

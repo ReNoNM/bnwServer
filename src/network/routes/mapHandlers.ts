@@ -70,8 +70,8 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
 
     // Заполняем область, добавляя пустые тайлы где нужно
     const regionData = [];
-    for (let x = clampedStartX; x <= clampedEndX; x++) {
-      for (let y = clampedStartY; y <= clampedEndY; y++) {
+    for (let y = clampedStartY; y <= clampedEndY; y++) {
+      for (let x = clampedStartX; x <= clampedEndX; x++) {
         const key = `${x},${y}`;
         const tile = tileMap.get(key) || {
           locationId: 0,

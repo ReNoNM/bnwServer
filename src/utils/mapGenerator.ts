@@ -42,6 +42,7 @@ function shuffle<T>(arr: T[]): T[] {
 function getSide(): string {
   return ["top", "right", "bottom", "left"][getRandomInt(0, 3)];
 }
+
 const defaultAreas: Area[] = [
   { locationId: 0, name: "Равнина", className: "plain", size: [1, 1], minCount: 1, maxCount: 1, isArea: false },
   { locationId: 1, name: "Холм", className: "hill", size: [2, 4], minCount: 40, maxCount: 60, priority: 1, isArea: true },
@@ -148,13 +149,13 @@ export function generateMap({
   maxPlacementAttempts = 1500,
   areas = defaultAreas,
 }: GenerateMapOptions = {}): MapResult {
-  const map: Tile[][] = Array.from({ length: mapSize }, (_, y) =>
-    Array.from({ length: mapSize }, (_, x) => ({
+  const map: Tile[][] = Array.from({ length: mapSize }, (_, row) =>
+    Array.from({ length: mapSize }, (_, col) => ({
       locationId: 0,
       type: "plain",
       label: "",
-      x,
-      y,
+      x: col,
+      y: row,
     }))
   );
 
@@ -163,10 +164,10 @@ export function generateMap({
   const groupStats: Record<string, { count: number; areaCount: number }> = {};
 
   function isValidPlacement(cells: [number, number][]): boolean {
-    return cells.every(([x, y]) => {
-      for (let i = x - minDistanceBetweenAreas; i <= x + minDistanceBetweenAreas; i++) {
-        for (let j = y - minDistanceBetweenAreas; j <= y + minDistanceBetweenAreas; j++) {
-          if (i >= 0 && j >= 0 && i < mapSize && j < mapSize && map[i][j].type !== "plain") return false;
+    return cells.every(([col, row]) => {
+      for (let i = col - minDistanceBetweenAreas; i <= col + minDistanceBetweenAreas; i++) {
+        for (let j = row - minDistanceBetweenAreas; j <= row + minDistanceBetweenAreas; j++) {
+          if (i >= 0 && j >= 0 && i < mapSize && j < mapSize && map[j][i].type !== "plain") return false;
         }
       }
       return true;
@@ -176,55 +177,55 @@ export function generateMap({
   function placeArea(area: Area): boolean {
     let attempts = 0;
     while (attempts++ < maxPlacementAttempts) {
-      let startX, startY;
+      let startCol, startRow;
 
       if (area.isSide) {
         const side = getSide();
 
         switch (side) {
           case "top":
-            startX = 0;
-            startY = getRandomInt(0, mapSize - 1);
+            startRow = 0;
+            startCol = getRandomInt(0, mapSize - 1);
             break;
           case "bottom":
-            startX = mapSize - 1;
-            startY = getRandomInt(0, mapSize - 1);
+            startRow = mapSize - 1;
+            startCol = getRandomInt(0, mapSize - 1);
             break;
           case "left":
-            startX = getRandomInt(0, mapSize - 1);
-            startY = 0;
+            startCol = 0;
+            startRow = getRandomInt(0, mapSize - 1);
             break;
           case "right":
-            startX = getRandomInt(0, mapSize - 1);
-            startY = mapSize - 1;
+            startCol = mapSize - 1;
+            startRow = getRandomInt(0, mapSize - 1);
             break;
         }
       } else {
-        startX = getRandomInt(0, mapSize - 1);
-        startY = getRandomInt(0, mapSize - 1);
+        startCol = getRandomInt(0, mapSize - 1);
+        startRow = getRandomInt(0, mapSize - 1);
       }
 
       const areaSize = getRandomInt(area.size[0], area.size[1]);
       const cells = new Set<string>();
-      const frontier: [number, number][] = [[startX, startY]];
+      const frontier: [number, number][] = [[startCol, startRow]];
 
       while (cells.size < areaSize && frontier.length > 0) {
         const idx = getRandomInt(0, frontier.length - 1);
-        const [x, y] = frontier.splice(idx, 1)[0];
-        const key = `${x},${y}`;
+        const [col, row] = frontier.splice(idx, 1)[0];
+        const key = `${col},${row}`;
 
-        if (!cells.has(key) && x >= 0 && y >= 0 && x < mapSize && y < mapSize) {
+        if (!cells.has(key) && col >= 0 && row >= 0 && col < mapSize && row < mapSize) {
           cells.add(key);
 
           shuffle([
-            [x + 1, y],
-            [x - 1, y],
-            [x, y + 1],
-            [x, y - 1],
-          ]).forEach(([nx, ny]) => {
-            const nKey = `${nx},${ny}`;
-            if (nx >= 0 && ny >= 0 && nx < mapSize && ny < mapSize && !cells.has(nKey) && map[nx][ny].type === "plain") {
-              frontier.push([nx, ny]);
+            [col + 1, row],
+            [col - 1, row],
+            [col, row + 1],
+            [col, row - 1],
+          ]).forEach(([nCol, nRow]) => {
+            const nKey = `${nCol},${nRow}`;
+            if (nCol >= 0 && nRow >= 0 && nCol < mapSize && nRow < mapSize && !cells.has(nKey) && map[nRow][nCol].type === "plain") {
+              frontier.push([nCol, nRow]);
             }
           });
         }
@@ -233,12 +234,12 @@ export function generateMap({
       const coordCells: [number, number][] = [...cells].map((str) => str.split(",").map(Number) as [number, number]);
 
       if (coordCells.length === areaSize && isValidPlacement(coordCells)) {
-        coordCells.forEach(([x, y]) => {
-          map[x][y] = {
+        coordCells.forEach(([col, row]) => {
+          map[row][col] = {
             type: area.className,
             label: area.name,
-            x: y,
-            y: x,
+            x: col,
+            y: row,
             locationId: area.locationId,
           };
         });
@@ -251,6 +252,7 @@ export function generateMap({
     }
     return false;
   }
+
   for (const area of sortedAreas) {
     if (!area.isArea) continue;
 
@@ -275,10 +277,3 @@ export function generateMap({
 
   return { map, stats };
 }
-
-// export const result: MapResult = generateMap({
-//   mapSize: 50,
-//   minDistanceBetweenAreas: 0,
-//   maxPlacementAttempts: 1500,
-//   areas: defaultAreas,
-// });
