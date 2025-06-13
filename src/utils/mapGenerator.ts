@@ -46,7 +46,7 @@ function getSide(): string {
 const defaultAreas: Area[] = [
   { locationId: 0, name: "Равнина", className: "plain", size: [1, 1], minCount: 1, maxCount: 1, isArea: false },
   { locationId: 1, name: "Холм", className: "hill", size: [2, 4], minCount: 40, maxCount: 60, priority: 1, isArea: true },
-  { locationId: 2, name: "Озеро", className: "lake", size: [4, 8], minCount: 40, maxCount: 60, priority: 1, isArea: true },
+  { locationId: 2, name: "Озеро", className: "lake", size: [1, 1], minCount: 40, maxCount: 60, priority: 1, isArea: true },
   { locationId: 3, name: "Лес", className: "forest", size: [2, 10], minCount: 40, maxCount: 60, priority: 1, isArea: true },
   { locationId: 4, name: "Лекарственные сады", className: "garden", size: [3, 5], minCount: 10, maxCount: 20, priority: 2, isArea: true },
   { locationId: 5, name: "Духовные горы", className: "mountain", size: [3, 5], minCount: 40, maxCount: 60, priority: 2, isArea: true },
