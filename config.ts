@@ -37,7 +37,7 @@ const config = {
     logLevel: getEnv("LOG_LEVEL", "INFO"),
     environment: NODE_ENV,
     heartbeatInterval: getNumEnv("HEARTBEAT_INTERVAL", 30000),
-    maxPayloadSize: getNumEnv("MAX_PAYLOAD_SIZE", 1048576), // 1MB
+    maxPayloadSize: getNumEnv("MAX_PAYLOAD_SIZE", 2097152), // 1MB
   },
 
   // Настройки базы данных

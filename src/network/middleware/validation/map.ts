@@ -46,6 +46,14 @@ export const getMapTilesPayloadSchema = Type.Object({
   ),
 });
 
+// Схема для запроса мира
+export const getWolrdMapPayloadSchema = Type.Object({
+  worldId: Type.String({
+    minLength: 1,
+    errorMessage: { minLength: "ID мира не может быть пустым" },
+  }),
+});
+
 // Схема для запроса одного тайла
 export const getTilePayloadSchema = Type.Object({
   worldId: Type.String({
@@ -66,3 +74,4 @@ export const getTilePayloadSchema = Type.Object({
 export type GetMapRegionPayload = Static<typeof getMapRegionPayloadSchema>;
 export type GetMapTilesPayload = Static<typeof getMapTilesPayloadSchema>;
 export type GetTilePayload = Static<typeof getTilePayloadSchema>;
+export type GetWorldMapPayload = Static<typeof getWolrdMapPayloadSchema>;
