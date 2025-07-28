@@ -95,7 +95,7 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
       startY: clampedStartY,
       endX: clampedEndX,
       endY: clampedEndY,
-      tiles: regionData,
+      tiles: deflateSync(Buffer.from(JSON.stringify(regionData))).toString("base64"),
       totalTiles: regionData.length,
     });
   } catch (error) {
