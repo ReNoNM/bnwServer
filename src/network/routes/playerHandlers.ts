@@ -7,10 +7,12 @@ import * as mapRepository from "../../db/repositories/mapRepository";
 import { handleError } from "../../utils/errorHandler";
 import { playerRepository } from "../../db";
 import { generateMap } from "../../utils/mapGenerator";
+import { MapTileDTO } from "../../db/models/mapTile";
 
 export function registerPlayerHandlers(): void {
   registerHandler("player", "searchWorld", handleSearchWorld);
   registerHandler("player", "spawn", handleSpawn);
+  registerHandler("player", "getPointWorld", handleGetPointWorld);
 }
 
 /**
@@ -256,5 +258,108 @@ async function handleSpawn(ws: WebSocket, data: any): Promise<void> {
   } catch (error) {
     handleError(error as Error, "player.spawn");
     sendError(ws, "player/spawn", "Внутренняя ошибка сервера");
+  }
+}
+
+async function handleGetPointWorld(ws: WebSocket): Promise<void> {
+  try {
+    const playerId = (ws as any)?.playerData?.id as string | undefined;
+    if (!playerId) {
+      sendError(ws, "player/getPointWorld", "Неавторизовано");
+      return;
+    }
+
+    const player = await playerRepository.getById(playerId);
+    if (!player) {
+      sendError(ws, "player/getPointWorld", "Игрок не найден");
+      return;
+    }
+
+    if (!player.mainWorldId) {
+      sendError(ws, "player/getPointWorld", "У игрока нет текущего мира");
+      return;
+    }
+
+    const world = await worldRepository.getById(player.mainWorldId);
+    if (!world) {
+      sendError(ws, "player/getPointWorld", "Мир не найден");
+      return;
+    }
+
+    // берём карту мира
+    const tiles = await mapRepository.getByWorldId(world.id);
+    if (!tiles.length) {
+      sendSuccess(ws, "player/getPointWorld", { noPoints: true, points: [] });
+      return;
+    }
+
+    const { sizeX, sizeY } = world;
+    const keyOf = (x: number, y: number) => `${x}:${y}`;
+    const byPos = new Map<string, MapTileDTO>();
+    for (const t of tiles) byPos.set(keyOf(t.x, t.y), t);
+
+    const allowedNeighbors = new Set(["plain", "hill", "lake", "forest"]);
+
+    const isBorder = (x: number, y: number) => x <= 0 || y <= 0 || x >= sizeX - 1 || y >= sizeY - 1;
+
+    const get = (x: number, y: number) => byPos.get(keyOf(x, y));
+    const passNeighbors = (x: number, y: number) => {
+      const up = get(x, y - 1);
+      const down = get(x, y + 1);
+      const left = get(x - 1, y);
+      const right = get(x + 1, y);
+      return (
+        !!up &&
+        allowedNeighbors.has(up.type) &&
+        !!down &&
+        allowedNeighbors.has(down.type) &&
+        !!left &&
+        allowedNeighbors.has(left.type) &&
+        !!right &&
+        allowedNeighbors.has(right.type)
+      );
+    };
+
+    // TODO: расстояние ≥ 15 клеток от чужого таунхолла
+    const passTownhallDistance = (_x: number, _y: number) => true;
+
+    // Кандидаты
+    const candidates: Array<{ x: number; y: number }> = [];
+    for (const t of tiles) {
+      if (t.type !== "plain") continue;
+      if (isBorder(t.x, t.y)) continue;
+      if (!passNeighbors(t.x, t.y)) continue;
+      if (!passTownhallDistance(t.x, t.y)) continue;
+      candidates.push({ x: t.x, y: t.y });
+    }
+
+    if (!candidates.length) {
+      sendSuccess(ws, "player/getPointWorld", { noPoints: true, points: [] });
+      log(`player/getPointWorld -> no points (world: ${world.id}, player: ${player.id})`);
+      return;
+    }
+
+    shuffleInPlace(candidates);
+    console.log("🚀 ~ handleGetPointWorld ~ candidates:", candidates.length);
+    const points = candidates.slice(0, 3);
+
+    sendSuccess(ws, "player/getPointWorld", {
+      noPoints: false,
+      worldId: world.id,
+      points,
+      count: points.length,
+    });
+
+    log(`player/getPointWorld -> ${points.length} points (world: ${world.id}, player: ${player.id})`);
+  } catch (error) {
+    handleError(error as Error, "player.getPointWorld");
+    sendError(ws, "player/getPointWorld", "Внутренняя ошибка сервера");
+  }
+}
+
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
   }
 }
