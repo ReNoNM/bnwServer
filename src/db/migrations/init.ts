@@ -109,10 +109,11 @@ const tables: TableDefinition[] = [
       { name: "type_id", type: "INTEGER", constraints: "NOT NULL DEFAULT 0" },
       { name: "label", type: "VARCHAR(100)", defaultValue: "''" },
       { name: "metadata", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "owner_player_id", type: "UUID", nullable: true, constraints: "REFERENCES players(id) ON DELETE SET NULL" },
+      { name: "is_capital", type: "BOOLEAN", defaultValue: "false" },
+      { name: "building_id", type: "UUID", nullable: true },
     ],
-    constraints: [
-      "UNIQUE(world_id, x, y)", // Уникальная комбинация мира и координат
-    ],
+    constraints: ["UNIQUE(world_id, x, y)"],
     indexes: [
       { name: "idx_map_world_id", columns: "world_id" },
       { name: "idx_map_coordinates", columns: ["world_id", "x", "y"], unique: true },
@@ -120,6 +121,44 @@ const tables: TableDefinition[] = [
       { name: "idx_map_type_id", columns: "type_id" },
       { name: "idx_map_x", columns: "x" },
       { name: "idx_map_y", columns: "y" },
+      { name: "idx_map_owner_player_id", columns: "owner_player_id" },
+      { name: "idx_map_is_capital", columns: "is_capital" },
+      { name: "idx_map_building_id", columns: "building_id" },
+    ],
+  },
+  {
+    name: "buildings",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "map_cell_id", type: "UUID", constraints: "NOT NULL REFERENCES map(id) ON DELETE CASCADE" },
+      { name: "owner_player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
+      { name: "type", type: "VARCHAR(50)", constraints: "NOT NULL" },
+      { name: "level", type: "INTEGER", constraints: "NOT NULL DEFAULT 1" },
+      { name: "data", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [
+      { name: "idx_buildings_map_cell", columns: "map_cell_id", unique: true }, // одно здание на клетку
+      { name: "idx_buildings_owner", columns: "owner_player_id" },
+      { name: "idx_buildings_type", columns: "type" },
+    ],
+  },
+  {
+    name: "map_visibility",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "map_cell_id", type: "UUID", constraints: "NOT NULL REFERENCES map(id) ON DELETE CASCADE" },
+      { name: "player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
+      // Вставлю column-level вариант:
+      { name: "status", type: "VARCHAR(20)", constraints: "NOT NULL CHECK (status IN ('seen','scouted','visited'))" },
+      { name: "first_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "last_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [
+      { name: "idx_map_visibility_cell_player", columns: ["map_cell_id", "player_id"], unique: true },
+      { name: "idx_map_visibility_player", columns: "player_id" },
+      { name: "idx_map_visibility_status", columns: "status" },
     ],
   },
   {
