@@ -122,6 +122,23 @@ const tables: TableDefinition[] = [
       { name: "idx_map_y", columns: "y" },
     ],
   },
+  {
+    name: "spawn_points_offers",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
+      { name: "world_id", type: "UUID", constraints: "NOT NULL REFERENCES worlds(id) ON DELETE CASCADE" },
+      { name: "points", type: "JSONB", constraints: "NOT NULL" }, // [{x:number,y:number},...]
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "consumed", type: "BOOLEAN", defaultValue: "false" },
+    ],
+    indexes: [
+      { name: "idx_spawn_points_offers_player", columns: "player_id" },
+      { name: "idx_spawn_points_offers_world", columns: "world_id" },
+      { name: "idx_spawn_points_offers_consumed", columns: "consumed" },
+      { name: "idx_spawn_points_offers_created_at", columns: "created_at" },
+    ],
+  },
 ];
 
 // Функция для выполнения начальных миграций базы данных

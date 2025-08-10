@@ -60,6 +60,15 @@ export interface Players {
   username: string;
 }
 
+export interface SpawnPointsOffers {
+  consumed: Generated<boolean | null>;
+  created_at: Generated<Timestamp | null>;
+  id: Generated<string>;
+  player_id: string;
+  points: Json;
+  world_id: string;
+}
+
 export interface Tokens {
   device_info: Generated<Json | null>;
   expires_at: Int8;
@@ -87,6 +96,7 @@ export interface DB {
   chat_messages: ChatMessages;
   map: Map;
   players: Players;
+  spawn_points_offers: SpawnPointsOffers;
   tokens: Tokens;
   worlds: Worlds;
 }

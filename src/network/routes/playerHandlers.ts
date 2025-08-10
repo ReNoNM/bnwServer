@@ -2,17 +2,18 @@ import { WebSocket } from "ws";
 import { registerHandler } from "../messageDispatcher";
 import { sendError, sendSuccess } from "../../utils/websocketUtils";
 import { log } from "../../utils/logger";
-import * as worldRepository from "../../db/repositories/worldRepository";
-import * as mapRepository from "../../db/repositories/mapRepository";
 import { handleError } from "../../utils/errorHandler";
 import { playerRepository } from "../../db";
 import { generateMap } from "../../utils/mapGenerator";
 import { MapTileDTO } from "../../db/models/mapTile";
+import { spawnPointsOfferRepository, mapRepository, worldRepository } from "../../db/repositories";
+import { ChoosePointWorldPayload, choosePointWorldPayloadSchema, validateMessage } from "../middleware/validation";
 
 export function registerPlayerHandlers(): void {
   registerHandler("player", "searchWorld", handleSearchWorld);
   registerHandler("player", "spawn", handleSpawn);
   registerHandler("player", "getPointWorld", handleGetPointWorld);
+  registerHandler("player", "choosePointWorld", handleChoosePointWorld);
 }
 
 /**
@@ -286,12 +287,35 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
       return;
     }
 
+    const existingOffer = await spawnPointsOfferRepository.getActiveForPlayer(player.id, world.id);
+    if (existingOffer) {
+      sendSuccess(ws, "player/getPointWorld", {
+        noPoints: false,
+        worldId: world.id,
+        offerId: existingOffer.id,
+        points: existingOffer.points,
+        count: world.players.length,
+      });
+      return;
+    }
+
     // берём карту мира
     const tiles = await mapRepository.getByWorldId(world.id);
     if (!tiles.length) {
       sendSuccess(ws, "player/getPointWorld", { noPoints: true, points: [] });
       return;
     }
+
+    const offeredPoints = await spawnPointsOfferRepository.getActivePointsByWorld(world.id);
+
+    // вспомогалка: манхэттенское расстояние
+    const farFromOffered = (x: number, y: number) => {
+      for (const p of offeredPoints) {
+        const dist = Math.abs(x - p.x) + Math.abs(y - p.y);
+        if (dist < 3) return false; // слишком близко (<3)
+      }
+      return true;
+    };
 
     const { sizeX, sizeY } = world;
     const keyOf = (x: number, y: number) => `${x}:${y}`;
@@ -330,6 +354,7 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
       if (isBorder(t.x, t.y)) continue;
       if (!passNeighbors(t.x, t.y)) continue;
       if (!passTownhallDistance(t.x, t.y)) continue;
+      if (!farFromOffered(t.x, t.y)) continue;
       candidates.push({ x: t.x, y: t.y });
     }
 
@@ -343,11 +368,21 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
     console.log("🚀 ~ handleGetPointWorld ~ candidates:", candidates.length);
     const points = candidates.slice(0, 3);
 
+    const offer = await spawnPointsOfferRepository.create({
+      playerId: player.id,
+      worldId: world.id,
+      points,
+    });
+    if (!offer) {
+      sendError(ws, "player/getPointWorld", "Не удалось сохранить варианты");
+      return;
+    }
+
     sendSuccess(ws, "player/getPointWorld", {
       noPoints: false,
       worldId: world.id,
       points,
-      count: points.length,
+      count: world.players.length,
     });
 
     log(`player/getPointWorld -> ${points.length} points (world: ${world.id}, player: ${player.id})`);
@@ -362,4 +397,41 @@ function shuffleInPlace<T>(arr: T[]): void {
     const j = Math.floor(Math.random() * (i + 1));
     [arr[i], arr[j]] = [arr[j], arr[i]];
   }
+}
+
+async function handleChoosePointWorld(ws: WebSocket, data: any): Promise<void> {
+  const validation = validateMessage<ChoosePointWorldPayload>(choosePointWorldPayloadSchema, data);
+  if (!validation.success) {
+    sendError(ws, "player/choosePointWorld", "Ошибка валидации", { details: validation.errors });
+    return;
+  }
+
+  const playerId = (ws as any)?.playerData?.id as string | undefined;
+  if (!playerId) {
+    sendError(ws, "player/choosePointWorld", "Неавторизовано");
+    return;
+  }
+
+  const { offerId } = validation.data;
+  if (!offerId) {
+    sendError(ws, "player/choosePointWorld", "Некорректные данные");
+    return;
+  }
+
+  const offer = await spawnPointsOfferRepository.getActiveById(offerId, playerId);
+
+  if (!offer) {
+    sendError(ws, "player/choosePointWorld", "Оффер не найден или уже использован");
+    return;
+  }
+
+  // TODO: тут фиксируем выбор (spawnX/spawnY или создание объекта)
+  // await playerRepository.update(playerId, { spawnX: x, spawnY: y } as any);
+
+  await spawnPointsOfferRepository.consume(offer.id);
+
+  sendSuccess(ws, "player/choosePointWorld", {
+    worldId: offer.worldId,
+    point: offer,
+  });
 }
