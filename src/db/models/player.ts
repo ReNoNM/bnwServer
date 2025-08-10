@@ -10,6 +10,7 @@ export interface Player {
   lastLogin?: number;
   status: "online" | "offline";
   settings?: Partial<PlayerSettings>;
+  mainWorldId?: string | null;
 }
 
 export interface PlayerSettings {
@@ -28,6 +29,7 @@ export interface PlayerDTO {
   createdAt: number;
   lastLogin?: number;
   settings?: PlayerSettings;
+  mainWorldId?: string | null;
 }
 
 export function playerToDTO(player: Player): PlayerDTO {

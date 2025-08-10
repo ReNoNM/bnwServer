@@ -7,6 +7,8 @@ export interface World {
   createdAt: number;
   updatedAt: number;
   settings?: Record<string, any>;
+  players: string[];
+  isOpen: boolean;
 }
 
 export interface WorldDTO {
@@ -18,6 +20,8 @@ export interface WorldDTO {
   createdAt: number;
   updatedAt: number;
   settings?: Record<string, any>;
+  players: string[];
+  isOpen: boolean;
 }
 
 export function worldToDTO(world: World): WorldDTO {

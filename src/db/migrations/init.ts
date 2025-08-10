@@ -34,6 +34,7 @@ const tables: TableDefinition[] = [
       { name: "last_login", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
       { name: "status", type: "VARCHAR(10)", defaultValue: "'offline'" },
       { name: "settings", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "main_world_id", type: "UUID" },
     ],
     indexes: [
       { name: "idx_players_username", columns: "username" },
@@ -87,6 +88,8 @@ const tables: TableDefinition[] = [
       { name: "world_type", type: "VARCHAR(50)", constraints: "NOT NULL DEFAULT 'standard'" },
       { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "players", type: "UUID[]", defaultValue: "'{}'" }, // пустой массив UUID
+      { name: "is_open", type: "BOOLEAN", defaultValue: "true" }, // открыто по умолчанию
       { name: "settings", type: "JSONB", defaultValue: "'{}'::jsonb" },
     ],
     indexes: [

@@ -15,6 +15,8 @@ export async function getAll(): Promise<World[]> {
         "created_at as createdAt",
         "updated_at as updatedAt",
         "settings",
+        "players",
+        "is_open as isOpen",
       ])
       .execute();
 
@@ -22,6 +24,7 @@ export async function getAll(): Promise<World[]> {
       ...row,
       createdAt: row.createdAt instanceof Date ? row.createdAt.getTime() : 0,
       updatedAt: row.updatedAt instanceof Date ? row.updatedAt.getTime() : 0,
+      players: Array.isArray(row.players) ? row.players : [],
     })) as World[];
   } catch (err) {
     logError(`Ошибка получения списка миров: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
@@ -42,6 +45,8 @@ export async function getById(id: string): Promise<World | undefined> {
         "created_at as createdAt",
         "updated_at as updatedAt",
         "settings",
+        "players",
+        "is_open as isOpen",
       ])
       .where("id", "=", id)
       .executeTakeFirst();
@@ -52,6 +57,7 @@ export async function getById(id: string): Promise<World | undefined> {
       ...result,
       createdAt: result.createdAt instanceof Date ? result.createdAt.getTime() : 0,
       updatedAt: result.updatedAt instanceof Date ? result.updatedAt.getTime() : 0,
+      players: Array.isArray(result.players) ? result.players : [],
     } as World;
   } catch (err) {
     logError(`Ошибка получения мира по ID: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
@@ -79,6 +85,8 @@ export async function add(world: Omit<World, "id" | "createdAt" | "updatedAt">):
         "created_at as createdAt",
         "updated_at as updatedAt",
         "settings",
+        "players",
+        "is_open as isOpen",
       ])
       .executeTakeFirst();
 
@@ -88,6 +96,7 @@ export async function add(world: Omit<World, "id" | "createdAt" | "updatedAt">):
       ...result,
       createdAt: result.createdAt instanceof Date ? result.createdAt.getTime() : 0,
       updatedAt: result.updatedAt instanceof Date ? result.updatedAt.getTime() : 0,
+      players: Array.isArray(result.players) ? result.players : [],
     } as World;
 
     log(`Мир создан: ${newWorld.name} (${newWorld.id})`);
@@ -96,4 +105,18 @@ export async function add(world: Omit<World, "id" | "createdAt" | "updatedAt">):
     logError(`Ошибка создания мира: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return undefined;
   }
+}
+
+export async function setPlayersAndOpen(worldId: string, players: string[], isOpen: boolean): Promise<void> {
+  try {
+    await db
+      .updateTable("worlds")
+      .set({
+        players,
+        is_open: isOpen,
+        updated_at: new Date(),
+      })
+      .where("id", "=", worldId)
+      .executeTakeFirst();
+  } catch (err) {}
 }

@@ -141,6 +141,8 @@ async function handleCreateWorld(ws: WebSocket, data: any): Promise<void> {
       sizeY: 50,
       worldType: "standard",
       settings: {},
+      isOpen: true,
+      players: [],
     });
 
     if (!newWorld) {

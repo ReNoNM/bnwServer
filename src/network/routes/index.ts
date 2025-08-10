@@ -3,6 +3,7 @@ import { registerChatHandlers } from "./chatHandlers";
 import { registerSystemHandlers } from "./systemHandlers";
 import { registerMapHandlers } from "./mapHandlers";
 import { log } from "../../utils/logger";
+import { registerPlayerHandlers } from "./playerHandlers";
 
 // Регистрация всех обработчиков маршрутов
 export function registerAllHandlers(): void {
@@ -18,7 +19,7 @@ export function registerAllHandlers(): void {
   registerSystemHandlers();
 
   // Регистрация обработчиков карты
-  registerMapHandlers(); // Новая регистрация
-
+  registerMapHandlers();
+  registerPlayerHandlers();
   log("Все обработчики маршрутов зарегистрированы");
 }

@@ -51,6 +51,7 @@ export interface Players {
   email: string;
   id: Generated<string>;
   last_login: Timestamp | null;
+  main_world_id: string | null;
   password: string;
   settings: Generated<Json | null>;
   status: Generated<string | null>;
@@ -72,7 +73,9 @@ export interface Tokens {
 export interface Worlds {
   created_at: Generated<Timestamp | null>;
   id: Generated<string>;
+  is_open: Generated<boolean | null>;
   name: string;
+  players: Generated<string[] | null>;
   settings: Generated<Json | null>;
   size_x: number;
   size_y: number;

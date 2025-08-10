@@ -18,6 +18,7 @@ export async function getAll(): Promise<Player[]> {
         "last_login as lastLogin",
         "status",
         "settings",
+        "main_world_id as mainWorldId",
       ])
       .execute();
 
@@ -51,6 +52,7 @@ export async function getById(id: string): Promise<Player | undefined> {
         "last_login as lastLogin",
         "status",
         "settings",
+        "main_world_id as mainWorldId",
       ])
       .where("id", "=", id)
       .executeTakeFirst();
@@ -84,6 +86,7 @@ export async function getByUsername(username: string): Promise<Player | undefine
         "last_login as lastLogin",
         "status",
         "settings",
+        "main_world_id as mainWorldId",
       ])
       .where(sql`LOWER(username)`, "=", username.toLowerCase())
       .executeTakeFirst();
@@ -191,6 +194,7 @@ export async function getByEmail(email: string): Promise<Player | undefined> {
         "last_login as lastLogin",
         "status",
         "settings",
+        "main_world_id as mainWorldId",
       ])
       .where("email", "=", email.toLowerCase())
       .executeTakeFirst();
