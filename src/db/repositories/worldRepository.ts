@@ -65,7 +65,7 @@ export async function getById(id: string): Promise<World | undefined> {
   }
 }
 
-export async function add(world: Omit<World, "id" | "createdAt" | "updatedAt">): Promise<World | undefined> {
+export async function add(world: Omit<World, "id" | "createdAt" | "updatedAt" | "players" | "isOpen">): Promise<World | undefined> {
   try {
     const result = await db
       .insertInto("worlds")
