@@ -25,6 +25,17 @@ export type JsonValue = JsonArray | JsonObject | JsonPrimitive;
 
 export type Timestamp = ColumnType<Date, Date | string, Date | string>;
 
+export interface Buildings {
+  created_at: Generated<Timestamp | null>;
+  data: Generated<Json | null>;
+  id: Generated<string>;
+  level: number;
+  map_cell_id: string;
+  owner_player_id: string;
+  type: string;
+  updated_at: Generated<Timestamp | null>;
+}
+
 export interface ChatMessages {
   id: Generated<string>;
   message: string;
@@ -36,14 +47,26 @@ export interface ChatMessages {
 }
 
 export interface Map {
+  building_id: string | null;
   id: Generated<string>;
+  is_capital: Generated<boolean | null>;
   label: Generated<string | null>;
   metadata: Generated<Json | null>;
+  owner_player_id: string | null;
   type: string;
   type_id: number;
   world_id: string;
   x: number;
   y: number;
+}
+
+export interface MapVisibility {
+  first_seen_at: Generated<Timestamp | null>;
+  id: Generated<string>;
+  last_seen_at: Generated<Timestamp | null>;
+  map_cell_id: string;
+  player_id: string;
+  status: string;
 }
 
 export interface Players {
@@ -93,8 +116,10 @@ export interface Worlds {
 }
 
 export interface DB {
+  buildings: Buildings;
   chat_messages: ChatMessages;
   map: Map;
+  map_visibility: MapVisibility;
   players: Players;
   spawn_points_offers: SpawnPointsOffers;
   tokens: Tokens;
