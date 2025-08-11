@@ -6,7 +6,7 @@ import { handleError } from "../../utils/errorHandler";
 import { playerRepository } from "../../db";
 import { generateMap } from "../../utils/mapGenerator";
 import { MapTileDTO } from "../../db/models/mapTile";
-import { spawnPointsOfferRepository, mapRepository, worldRepository } from "../../db/repositories";
+import { spawnPointsOfferRepository, mapRepository, worldRepository, mapVisibilityRepository, buildingRepository } from "../../db/repositories";
 import { ChoosePointWorldPayload, choosePointWorldPayloadSchema, validateMessage } from "../middleware/validation";
 
 export function registerPlayerHandlers(): void {
@@ -344,8 +344,16 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
       );
     };
 
-    // TODO: расстояние ≥ 15 клеток от чужого таунхолла
-    const passTownhallDistance = (_x: number, _y: number) => true;
+    const foreignTownhalls = tiles.filter((t) => t.isCapital && t.ownerPlayerId && t.ownerPlayerId !== playerId).map((t) => ({ x: t.x, y: t.y }));
+
+    //  расстояние ≥ 15 клеток от чужого таунхолла
+    const passTownhallDistance = (_x: number, _y: number) => {
+      if (foreignTownhalls.length === 0) return true;
+      return foreignTownhalls.every(({ x, y }) => {
+        const manhattan = Math.abs(x - _x) + Math.abs(y - _y);
+        return manhattan >= 15;
+      });
+    };
 
     // Кандидаты
     const candidates: Array<{ x: number; y: number }> = [];
@@ -400,38 +408,131 @@ function shuffleInPlace<T>(arr: T[]): void {
 }
 
 async function handleChoosePointWorld(ws: WebSocket, data: any): Promise<void> {
-  const validation = validateMessage<ChoosePointWorldPayload>(choosePointWorldPayloadSchema, data);
-  if (!validation.success) {
-    sendError(ws, "player/choosePointWorld", "Ошибка валидации", { details: validation.errors });
-    return;
+  try {
+    const validation = validateMessage<ChoosePointWorldPayload>(choosePointWorldPayloadSchema, data);
+    if (!validation.success) {
+      sendError(ws, "player/choosePointWorld", "Ошибка валидации", { details: validation.errors });
+      return;
+    }
+
+    const playerId = (ws as any)?.playerData?.id as string | undefined;
+    if (!playerId) {
+      sendError(ws, "player/choosePointWorld", "Неавторизовано");
+      return;
+    }
+
+    const { offerId, pointIndex } = validation.data;
+    if (!offerId) {
+      sendError(ws, "player/choosePointWorld", "Некорректные данные");
+      return;
+    }
+
+    // Получаем оффер
+    const offer = await spawnPointsOfferRepository.getActiveById(offerId, playerId);
+    if (!offer) {
+      sendError(ws, "player/choosePointWorld", "Оффер не найден или уже использован");
+      return;
+    }
+
+    // Проверяем индекс точки (если не передан, берем первую)
+    const selectedPointIndex = pointIndex !== undefined ? pointIndex : 0;
+    if (selectedPointIndex < 0 || selectedPointIndex >= offer.points.length) {
+      sendError(ws, "player/choosePointWorld", "Некорректный индекс точки");
+      return;
+    }
+
+    const selectedPoint = offer.points[selectedPointIndex];
+    const { x, y } = selectedPoint;
+    const worldId = offer.worldId;
+
+    // Начинаем транзакцию для всех операций
+    try {
+      // 1. Получаем ID клетки карты
+      const mapTile = await mapRepository.getTile(worldId, x, y);
+      if (!mapTile) {
+        sendError(ws, "player/choosePointWorld", "Клетка карты не найдена");
+        return;
+      }
+
+      // 2. Создаем здание mainhall
+      const building = await buildingRepository.create({
+        mapCellId: mapTile.id,
+        ownerPlayerId: playerId,
+        type: "mainhall",
+        level: 1,
+      });
+
+      if (!building) {
+        sendError(ws, "player/choosePointWorld", "Не удалось создать главное здание");
+        return;
+      }
+
+      // 3. Обновляем выбранную клетку карты
+      await mapRepository.updateTile(worldId, x, y, {
+        isCapital: true,
+        ownerPlayerId: playerId,
+        buildingId: building.id,
+      });
+
+      // 4. Обновляем соседние клетки крестом (верх, низ, лево, право)
+      const crossNeighbors = [
+        { x: x, y: y - 1 }, // верх
+        { x: x, y: y + 1 }, // низ
+        { x: x - 1, y: y }, // лево
+        { x: x + 1, y: y }, // право
+      ];
+
+      const neighborUpdates = crossNeighbors.map((coord) => ({
+        worldId,
+        x: coord.x,
+        y: coord.y,
+        ownerPlayerId: playerId,
+      }));
+
+      await mapRepository.updateTilesBatch(neighborUpdates);
+
+      // 5. Создаем видимость для квадрата 3x3 (радиус 1 с диагоналями)
+      const visibilityCells = [];
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const vx = x + dx;
+          const vy = y + dy;
+
+          // Получаем ID клетки для видимости
+          const visTile = await mapRepository.getTile(worldId, vx, vy);
+          if (visTile) {
+            visibilityCells.push({
+              mapCellId: visTile.id,
+              playerId: playerId,
+              status: "scouted" as const,
+            });
+          }
+        }
+      }
+
+      // Пакетное создание/обновление видимости
+      if (visibilityCells.length > 0) {
+        await mapVisibilityRepository.createOrUpdateBatch(visibilityCells);
+      }
+
+      // 6. Помечаем оффер как использованный
+      await spawnPointsOfferRepository.consume(offer.id);
+
+      // 7. Логируем успешную операцию
+      log(`Игрок ${playerId} выбрал точку спавна (${x}, ${y}) в мире ${worldId}`);
+
+      // Отправляем успешный ответ
+      sendSuccess(ws, "player/choosePointWorld", {
+        worldId: offer.worldId,
+        point: selectedPoint,
+        buildingId: building.id,
+      });
+    } catch (err) {
+      handleError(err as Error, "player.choosePointWorld.transaction");
+      sendError(ws, "player/choosePointWorld", "Ошибка при основании столицы");
+    }
+  } catch (error) {
+    handleError(error as Error, "player.choosePointWorld");
+    sendError(ws, "player/choosePointWorld", "Внутренняя ошибка сервера");
   }
-
-  const playerId = (ws as any)?.playerData?.id as string | undefined;
-  if (!playerId) {
-    sendError(ws, "player/choosePointWorld", "Неавторизовано");
-    return;
-  }
-
-  const { offerId } = validation.data;
-  if (!offerId) {
-    sendError(ws, "player/choosePointWorld", "Некорректные данные");
-    return;
-  }
-
-  const offer = await spawnPointsOfferRepository.getActiveById(offerId, playerId);
-
-  if (!offer) {
-    sendError(ws, "player/choosePointWorld", "Оффер не найден или уже использован");
-    return;
-  }
-
-  // TODO: тут фиксируем выбор (spawnX/spawnY или создание объекта)
-  // await playerRepository.update(playerId, { spawnX: x, spawnY: y } as any);
-
-  await spawnPointsOfferRepository.consume(offer.id);
-
-  sendSuccess(ws, "player/choosePointWorld", {
-    worldId: offer.worldId,
-    point: offer,
-  });
 }

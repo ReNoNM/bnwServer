@@ -7,6 +7,9 @@ export interface MapTile {
   typeId: number;
   label: string;
   metadata?: Record<string, any>;
+  isCapital: boolean;
+  ownerPlayerId: string;
+  buildingId: string;
 }
 
 export interface MapTileDTO {
@@ -18,6 +21,9 @@ export interface MapTileDTO {
   typeId: number;
   label: string;
   metadata?: Record<string, any>;
+  isCapital: boolean;
+  ownerPlayerId: string;
+  buildingId: string;
 }
 
 export function mapTileToDTO(mapTile: MapTile): MapTileDTO {

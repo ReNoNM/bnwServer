@@ -7,6 +7,7 @@ export const getPointWorldPayloadSchema = Type.Object({}, { additionalProperties
 export const choosePointWorldPayloadSchema = Type.Object(
   {
     offerId: Type.String({ format: "uuid" }), // если вдруг не UUID — замени на Type.String()
+    pointIndex: Type.Optional(Type.Number({ minimum: 0, maximum: 2 })),
   },
   { additionalProperties: true }
 );
