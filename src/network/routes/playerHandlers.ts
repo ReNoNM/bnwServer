@@ -234,6 +234,7 @@ async function handleSpawn(ws: WebSocket, data: any): Promise<void> {
           typeId: t.locationId,
           label: t.label,
           metadata: { generated: true, generatedAt: Date.now() },
+          isCapital: false,
         });
       }
     }
