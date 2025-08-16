@@ -36,6 +36,7 @@ import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUt
 import { generateToken, revokeAllUserTokens, revokeToken, validateToken } from "../../utils/tokenUtils";
 import { playerRepository } from "../../db";
 import { tags } from "../../utils/data";
+import { mapRepository } from "../../db/repositories";
 
 // Обработчик первого шага регистрации (отправка кода на почту)
 async function handleRegisterEmail(ws: WebSocket, data: any): Promise<void> {
@@ -155,7 +156,7 @@ async function handleCompleteRegistration(ws: WebSocket, data: any): Promise<voi
     sendSystemError(ws, "Ошибка при обработке запроса завершения регистрации");
   }
 }
-// В функцию handleLogin внесем изменения:
+
 async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage<LoginPayload>(loginPayloadSchema, data);
@@ -176,7 +177,9 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
         username: result.player.username,
         email: result.player.email,
       };
-
+      const tileCapital = result.player.mainWorldId
+        ? await mapRepository.searchCapitalByPlayerId(result.player.mainWorldId, result.player.id)
+        : undefined;
       // Обновляем информацию о клиенте
       updateClientInfo(ws, result.player.id, result.player.username);
 
@@ -184,10 +187,12 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
 
       const responseToken = result.token;
       log(`Вход успешен: ${email} (${result.player.username}), токен получен`);
-      // Отправляем токен как строку, а не как объект
       sendSuccess(ws, "auth/login", {
         player: result.player,
-        accessToken: responseToken, // Убедитесь, что это строка, а не объект
+        accessToken: responseToken,
+        isCapital: !!tileCapital?.isCapital,
+        x: tileCapital?.x,
+        y: tileCapital?.y,
       });
     } else {
       sendError(ws, "auth/login", result.error || "Неизвестная ошибка");
@@ -199,7 +204,6 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
   }
 }
 
-// Вот только часть для handleRefreshToken
 async function handleRefreshToken(ws: WebSocket, data: any): Promise<void> {
   try {
     const validation = validateMessage<TokenPayload>(tokenPayloadSchema, data);
@@ -269,7 +273,7 @@ async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
         username: player.username,
         email: player.email,
       };
-
+      const tileCapital = player.mainWorldId ? await mapRepository.searchCapitalByPlayerId(player.mainWorldId, player.id) : undefined;
       // Обновляем информацию о клиенте
       updateClientInfo(ws, player.id, player.username);
 
@@ -278,7 +282,10 @@ async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
 
       sendSuccess(ws, "auth/token", {
         message: "Аутентификация по токену успешна",
-        player: { id: player.id, username: player.username, email: player.email },
+        player: player,
+        isCapital: !!tileCapital?.isCapital,
+        x: tileCapital?.x,
+        y: tileCapital?.y,
       });
 
       log(`Аутентификация по токену: ${player.username} (${player.id})`);

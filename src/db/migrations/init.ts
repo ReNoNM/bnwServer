@@ -150,8 +150,7 @@ const tables: TableDefinition[] = [
       { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
       { name: "map_cell_id", type: "UUID", constraints: "NOT NULL REFERENCES map(id) ON DELETE CASCADE" },
       { name: "player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
-      // Вставлю column-level вариант:
-      { name: "status", type: "VARCHAR(20)", constraints: "NOT NULL CHECK (status IN ('seen','scouted','visited'))" },
+      { name: "status", type: "VARCHAR(20)", constraints: "NOT NULL CHECK (status IN ('notVisible', 'visible','scouted','visited'))" },
       { name: "first_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "last_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
     ],

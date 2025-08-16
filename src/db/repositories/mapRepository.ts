@@ -1,5 +1,5 @@
 import { db } from "../connection";
-import { MapTile } from "../models/mapTile";
+import { MapTile, MapTileWithVisibility } from "../models/mapTile";
 import { log, error as logError } from "../../utils/logger";
 
 export async function getByWorldId(worldId: string): Promise<MapTile[]> {
@@ -60,6 +60,35 @@ export async function getTile(worldId: string, x: number, y: number): Promise<Ma
   }
 }
 
+export async function searchCapitalByPlayerId(worldId: string, playerId: string): Promise<MapTile | undefined> {
+  try {
+    const result = await db
+      .selectFrom("map")
+      .select([
+        "id",
+        "world_id as worldId",
+        "x",
+        "y",
+        "type",
+        "type_id as typeId",
+        "label",
+        "metadata",
+        "is_capital as isCapital",
+        "owner_player_id as ownerPlayerId",
+        "building_id as buildingId",
+      ])
+      .where("world_id", "=", worldId)
+      .where("is_capital", "=", true)
+      .where("owner_player_id", "=", playerId)
+      .executeTakeFirst();
+    console.log(result);
+    return result as MapTile | undefined;
+  } catch (err) {
+    logError(`Ошибка получения тайла: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return undefined;
+  }
+}
+
 export async function addTiles(tiles: Omit<MapTile, "id">[]): Promise<boolean> {
   try {
     await db
@@ -84,35 +113,67 @@ export async function addTiles(tiles: Omit<MapTile, "id">[]): Promise<boolean> {
     return false;
   }
 }
-export async function getRegion(worldId: string, startX: number, startY: number, endX: number, endY: number): Promise<MapTile[]> {
+export async function getRegionForPlayer(
+  worldId: string,
+  playerId: string,
+  startX: number,
+  startY: number,
+  endX: number,
+  endY: number
+): Promise<MapTileWithVisibility[]> {
   try {
-    const results = await db
-      .selectFrom("map")
-      .select([
-        "id",
-        "world_id as worldId",
-        "x",
-        "y",
-        "type",
-        "type_id as typeId",
-        "label",
-        "metadata",
-        "is_capital as isCapital",
-        "owner_player_id as ownerPlayerId",
-        "building_id as buildingId",
+    const rows = await db
+      .selectFrom("map as m")
+      .leftJoin("map_visibility as mv", (join) => join.onRef("mv.map_cell_id", "=", "m.id").on("mv.player_id", "=", playerId))
+      .select((eb) => [
+        "m.id as id",
+        "m.world_id as worldId",
+        "m.x as x",
+        "m.y as y",
+        eb.fn.coalesce(eb.ref("mv.status"), eb.val("notVisible")).as("status"),
+        "m.type as type",
+        "m.type_id as typeId",
+        "m.label as label",
+        "m.metadata as metadata",
+        "m.is_capital as isCapital",
+        "m.owner_player_id as ownerPlayerId",
+        "m.building_id as buildingId",
       ])
-      .where("world_id", "=", worldId)
-      .where("x", ">=", startX)
-      .where("x", "<=", endX)
-      .where("y", ">=", startY)
-      .where("y", "<=", endY)
-      .orderBy("y")
-      .orderBy("x")
+      .where("m.world_id", "=", worldId)
+      .where("m.x", ">=", startX)
+      .where("m.x", "<=", endX)
+      .where("m.y", ">=", startY)
+      .where("m.y", "<=", endY)
+      .orderBy("m.y")
+      .orderBy("m.x")
       .execute();
 
-    return results as MapTile[];
+    // Приводим строки к дискриминированному union
+    const tiles: MapTileWithVisibility[] = rows.map((r: any) => {
+      if (r.status === "notVisible") {
+        const { id, worldId, x, y, status } = r;
+        return { id, worldId, x, y, status };
+      }
+      const { id, worldId, x, y, status, type, typeId, label, metadata, isCapital, ownerPlayerId, buildingId } = r;
+      return {
+        id,
+        worldId,
+        x,
+        y,
+        status,
+        type,
+        typeId,
+        label,
+        metadata,
+        isCapital,
+        ownerPlayerId,
+        buildingId,
+      };
+    });
+
+    return tiles;
   } catch (err) {
-    logError(`Ошибка получения области карты: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    logError(`Ошибка получения области карты (с видимостью): ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return [];
   }
 }
