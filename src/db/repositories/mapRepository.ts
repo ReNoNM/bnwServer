@@ -177,7 +177,38 @@ export async function getRegionForPlayer(
     return [];
   }
 }
+export async function getRegion(worldId: string, startX: number, startY: number, endX: number, endY: number): Promise<MapTile[]> {
+  try {
+    const results = await db
+      .selectFrom("map")
+      .select([
+        "id",
+        "world_id as worldId",
+        "x",
+        "y",
+        "type",
+        "type_id as typeId",
+        "label",
+        "metadata",
+        "is_capital as isCapital",
+        "owner_player_id as ownerPlayerId",
+        "building_id as buildingId",
+      ])
+      .where("world_id", "=", worldId)
+      .where("x", ">=", startX)
+      .where("x", "<=", endX)
+      .where("y", ">=", startY)
+      .where("y", "<=", endY)
+      .orderBy("y")
+      .orderBy("x")
+      .execute();
 
+    return results as MapTile[];
+  } catch (err) {
+    logError(`Ошибка получения области карты: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return [];
+  }
+}
 // Получение конкретных тайлов по координатам
 export async function getTilesByCoordinates(worldId: string, coordinates: { x: number; y: number }[]): Promise<MapTile[]> {
   try {

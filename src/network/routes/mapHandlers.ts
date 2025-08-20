@@ -85,6 +85,7 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
         }
       }
     }
+    // log(`Отправлена область карты ${worldId}: (${clampedStartX},${clampedStartY}) - (${clampedEndX},${clampedEndY}), ${regionData.length} тайлов`);
 
     sendSuccess(ws, "map/getRegion", {
       worldId,

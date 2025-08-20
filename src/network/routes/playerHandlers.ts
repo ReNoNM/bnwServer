@@ -5,14 +5,16 @@ import { log } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
 import { playerRepository } from "../../db";
 import { generateMap } from "../../utils/mapGenerator";
-import { MapTileDTO } from "../../db/models/mapTile";
+import { MapTile } from "../../db/models/mapTile";
 import { spawnPointsOfferRepository, mapRepository, worldRepository, mapVisibilityRepository, buildingRepository } from "../../db/repositories";
 import { ChoosePointWorldPayload, choosePointWorldPayloadSchema, validateMessage } from "../middleware/validation";
+import { deflateSync } from "zlib";
 
 export function registerPlayerHandlers(): void {
   registerHandler("player", "searchWorld", handleSearchWorld);
   registerHandler("player", "spawn", handleSpawn);
   registerHandler("player", "getPointWorld", handleGetPointWorld);
+  registerHandler("player", "getStartedMap", handleGetStartedMap);
   registerHandler("player", "choosePointWorld", handleChoosePointWorld);
 }
 
@@ -296,6 +298,7 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
         offerId: existingOffer.id,
         points: existingOffer.points,
         count: world.players.length,
+        worldName: world.name,
       });
       return;
     }
@@ -303,6 +306,7 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
     // берём карту мира
     const tiles = await mapRepository.getByWorldId(world.id);
     if (!tiles.length) {
+      await playerRepository.update(player.id, { mainWorldId: "" } as any);
       sendSuccess(ws, "player/getPointWorld", { noPoints: true, points: [] });
       return;
     }
@@ -320,7 +324,7 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
 
     const { sizeX, sizeY } = world;
     const keyOf = (x: number, y: number) => `${x}:${y}`;
-    const byPos = new Map<string, MapTileDTO>();
+    const byPos = new Map<string, MapTile>();
     for (const t of tiles) byPos.set(keyOf(t.x, t.y), t);
 
     const allowedNeighbors = new Set(["plain", "hill", "lake", "forest"]);
@@ -346,13 +350,22 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
     };
 
     const foreignTownhalls = tiles.filter((t) => t.isCapital && t.ownerPlayerId && t.ownerPlayerId !== playerId).map((t) => ({ x: t.x, y: t.y }));
+    const foreignEnemyTerritory = tiles.filter((t) => t.ownerPlayerId && t.ownerPlayerId !== playerId).map((t) => ({ x: t.x, y: t.y }));
 
-    //  расстояние ≥ 15 клеток от чужого таунхолла
+    //  расстояние ≥ 5 клеток от чужого таунхолла
     const passTownhallDistance = (_x: number, _y: number) => {
       if (foreignTownhalls.length === 0) return true;
       return foreignTownhalls.every(({ x, y }) => {
         const manhattan = Math.abs(x - _x) + Math.abs(y - _y);
-        return manhattan >= 15;
+        return manhattan >= 5;
+      });
+    };
+
+    const passEnemyDistance = (_x: number, _y: number) => {
+      if (foreignEnemyTerritory.length === 0) return true;
+      return foreignEnemyTerritory.every(({ x, y }) => {
+        const manhattan = Math.abs(x - _x) + Math.abs(y - _y);
+        return manhattan >= 2;
       });
     };
 
@@ -363,12 +376,14 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
       if (isBorder(t.x, t.y)) continue;
       if (!passNeighbors(t.x, t.y)) continue;
       if (!passTownhallDistance(t.x, t.y)) continue;
+      if (!passEnemyDistance(t.x, t.y)) continue;
       if (!farFromOffered(t.x, t.y)) continue;
       candidates.push({ x: t.x, y: t.y });
     }
 
     if (!candidates.length) {
-      sendSuccess(ws, "player/getPointWorld", { noPoints: true, points: [] });
+      await playerRepository.update(player.id, { mainWorldId: "" } as any);
+      sendSuccess(ws, "player/getPointWorld", { noPoints: true });
       log(`player/getPointWorld -> no points (world: ${world.id}, player: ${player.id})`);
       return;
     }
@@ -391,7 +406,9 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
       noPoints: false,
       worldId: world.id,
       points,
+      offerId: offer.id,
       count: world.players.length,
+      worldName: world.name,
     });
 
     log(`player/getPointWorld -> ${points.length} points (world: ${world.id}, player: ${player.id})`);
@@ -400,7 +417,50 @@ async function handleGetPointWorld(ws: WebSocket): Promise<void> {
     sendError(ws, "player/getPointWorld", "Внутренняя ошибка сервера");
   }
 }
+async function handleGetStartedMap(ws: WebSocket): Promise<void> {
+  try {
+    const playerId = (ws as any)?.playerData?.id as string | undefined;
+    if (!playerId) {
+      sendError(ws, "player/getStartedMap", "Неавторизовано");
+      return;
+    }
 
+    const player = await playerRepository.getById(playerId);
+    if (!player) {
+      sendError(ws, "player/getStartedMap", "Игрок не найден");
+      return;
+    }
+
+    if (!player.mainWorldId) {
+      sendError(ws, "player/getStartedMap", "У игрока нет текущего мира");
+      return;
+    }
+
+    const world = await worldRepository.getById(player.mainWorldId);
+    if (!world) {
+      sendError(ws, "player/getStartedMap", "Мир не найден");
+      return;
+    }
+
+    const existingOffer = await spawnPointsOfferRepository.getActiveForPlayer(player.id, world.id);
+    if (!existingOffer?.id || existingOffer?.consumed) {
+      sendError(ws, "player/getStartedMap", "Мировые точки не найдены");
+      return;
+    }
+
+    const tiles: MapTile[] = [];
+    for await (const item of existingOffer.points) {
+      const cells = await mapRepository.getRegion(world.id, item.x - 1, item.y - 1, item.x + 1, item.y + 1);
+      tiles.push(...cells.map((item) => ({ ...item, status: "visible" })));
+    }
+    sendSuccess(ws, "player/getStartedMap", {
+      tiles: deflateSync(Buffer.from(JSON.stringify(tiles))).toString("base64"),
+    });
+  } catch (error) {
+    handleError(error as Error, "player.getStartedMap");
+    sendError(ws, "player/getStartedMap", "Внутренняя ошибка сервера");
+  }
+}
 function shuffleInPlace<T>(arr: T[]): void {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));

@@ -187,12 +187,14 @@ async function handleLogin(ws: WebSocket, data: any): Promise<void> {
 
       const responseToken = result.token;
       log(`Вход успешен: ${email} (${result.player.username}), токен получен`);
-      sendSuccess(ws, "auth/login", {
-        player: result.player,
-        accessToken: responseToken,
+      sendSuccess(ws, "auth/additionData", {
         isCapital: !!tileCapital?.isCapital,
         x: tileCapital?.x,
         y: tileCapital?.y,
+      });
+      sendSuccess(ws, "auth/login", {
+        player: result.player,
+        accessToken: responseToken,
       });
     } else {
       sendError(ws, "auth/login", result.error || "Неизвестная ошибка");
@@ -279,13 +281,14 @@ async function handleTokenAuth(ws: WebSocket, data: any): Promise<void> {
 
       // Добавляем игрока в список онлайн
       addOnlinePlayer(player.id);
-
-      sendSuccess(ws, "auth/token", {
-        message: "Аутентификация по токену успешна",
-        player: player,
+      sendSuccess(ws, "auth/additionData", {
         isCapital: !!tileCapital?.isCapital,
         x: tileCapital?.x,
         y: tileCapital?.y,
+      });
+      sendSuccess(ws, "auth/token", {
+        message: "Аутентификация по токену успешна",
+        player: player,
       });
 
       log(`Аутентификация по токену: ${player.username} (${player.id})`);
