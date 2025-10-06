@@ -3,8 +3,8 @@ import { registerHandler } from "../messageDispatcher";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
 import { log } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
-import * as worldRepository from "../../db/repositories/worldRepository";
-import * as mapRepository from "../../db/repositories/mapRepository";
+import { mapRepository, worldRepository, buildingRepository } from "../../db/repositories";
+
 import {
   validateMessage,
   getMapRegionPayloadSchema,
@@ -85,7 +85,7 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
         }
       }
     }
-    // log(`Отправлена область карты ${worldId}: (${clampedStartX},${clampedStartY}) - (${clampedEndX},${clampedEndY}), ${regionData.length} тайлов`);
+    log(`Отправлена область карты ${worldId}: (${clampedStartX},${clampedStartY}) - (${clampedEndX},${clampedEndY}), ${regionData.length} тайлов`);
 
     sendSuccess(ws, "map/getRegion", {
       worldId,
@@ -96,6 +96,16 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
       tiles: deflateSync(Buffer.from(JSON.stringify(regionData))).toString("base64"),
       totalTiles: regionData.length,
     });
+
+    if (regionData.length) {
+      const tilesWithBuild = regionData.filter((item) => !!item.buildingId).map((item) => item.id);
+      const buildings = await buildingRepository.getByMapCellIds(tilesWithBuild);
+      if (buildings.length) {
+        sendSuccess(ws, "building/getBuildings", {
+          buildings: buildings,
+        });
+      }
+    }
   } catch (error) {
     handleError(error as Error, "MapHandlers.getRegion");
     sendSystemError(ws, "Ошибка при получении области карты");

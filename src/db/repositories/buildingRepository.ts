@@ -1,16 +1,6 @@
 import { db } from "../connection";
 import { error as logError } from "../../utils/logger";
-
-export interface Building {
-  id: string;
-  mapCellId: string;
-  ownerPlayerId: string;
-  type: string;
-  level: number;
-  data?: Record<string, any>;
-  createdAt?: Date;
-  updatedAt?: Date;
-}
+import { Building } from "../models/building";
 
 export async function create(params: {
   mapCellId: string;
@@ -76,6 +66,34 @@ export async function getByMapCellId(mapCellId: string): Promise<Building | null
   }
 }
 
+export async function getByMapCellIds(mapCellIds: string[]): Promise<Building[]> {
+  try {
+    if (mapCellIds.length) {
+      const results = await db
+        .selectFrom("buildings")
+        .select([
+          "id",
+          "map_cell_id as mapCellId",
+          "owner_player_id as ownerPlayerId",
+          "type",
+          "level",
+          "data",
+          "created_at as createdAt",
+          "updated_at as updatedAt",
+        ])
+        .where("map_cell_id", "in", mapCellIds)
+        .execute();
+
+      return results as Building[];
+    } else {
+      return [];
+    }
+  } catch (err) {
+    logError(`Ошибка получения зданий: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return [];
+  }
+}
+
 export async function getByOwnerPlayerId(ownerPlayerId: string): Promise<Building[]> {
   try {
     const results = await db
@@ -96,6 +114,30 @@ export async function getByOwnerPlayerId(ownerPlayerId: string): Promise<Buildin
     return results as Building[];
   } catch (err) {
     logError(`Ошибка получения зданий игрока: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return [];
+  }
+}
+
+export async function getByBuildId(buildId: string): Promise<Building[]> {
+  try {
+    const results = await db
+      .selectFrom("buildings")
+      .select([
+        "id",
+        "map_cell_id as mapCellId",
+        "owner_player_id as ownerPlayerId",
+        "type",
+        "level",
+        "data",
+        "created_at as createdAt",
+        "updated_at as updatedAt",
+      ])
+      .where("id", "=", buildId)
+      .execute();
+
+    return results as Building[];
+  } catch (err) {
+    logError(`Ошибка получения здания по id: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return [];
   }
 }
