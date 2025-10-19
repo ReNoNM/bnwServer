@@ -4,22 +4,17 @@ import { registerSystemHandlers } from "./systemHandlers";
 import { registerMapHandlers } from "./mapHandlers";
 import { log } from "../../utils/logger";
 import { registerPlayerHandlers } from "./playerHandlers";
+import { registerBuldingHandlers } from "./buldingHandlers";
 
 // Регистрация всех обработчиков маршрутов
 export function registerAllHandlers(): void {
   log("Регистрация обработчиков маршрутов...");
-
-  // Регистрация обработчиков аутентификации
   registerAuthHandlers();
-
-  // Регистрация обработчиков чата
   registerChatHandlers();
-
-  // Регистрация системных обработчиков
   registerSystemHandlers();
-
-  // Регистрация обработчиков карты
   registerMapHandlers();
   registerPlayerHandlers();
+  registerBuldingHandlers();
+
   log("Все обработчики маршрутов зарегистрированы");
 }

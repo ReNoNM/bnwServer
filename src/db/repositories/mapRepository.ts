@@ -60,6 +60,33 @@ export async function getTile(worldId: string, x: number, y: number): Promise<Ma
   }
 }
 
+export async function getTileById(tileId: string): Promise<MapTile | undefined> {
+  try {
+    const result = await db
+      .selectFrom("map")
+      .select([
+        "id",
+        "world_id as worldId",
+        "x",
+        "y",
+        "type",
+        "type_id as typeId",
+        "label",
+        "metadata",
+        "is_capital as isCapital",
+        "owner_player_id as ownerPlayerId",
+        "building_id as buildingId",
+      ])
+      .where("id", "=", tileId)
+      .executeTakeFirst();
+
+    return result as MapTile | undefined;
+  } catch (err) {
+    logError(`Ошибка получения тайла: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return undefined;
+  }
+}
+
 export async function searchCapitalByPlayerId(worldId: string, playerId: string): Promise<MapTile | undefined> {
   try {
     const result = await db
@@ -248,6 +275,7 @@ export async function getTilesByCoordinates(worldId: string, coordinates: { x: n
     return [];
   }
 }
+
 export async function updateTile(
   worldId: string,
   x: number,
@@ -277,6 +305,53 @@ export async function updateTile(
       .where("world_id", "=", worldId)
       .where("x", "=", x)
       .where("y", "=", y)
+      .returning([
+        "id",
+        "world_id as worldId",
+        "x",
+        "y",
+        "type",
+        "type_id as typeId",
+        "label",
+        "metadata",
+        "is_capital as isCapital",
+        "owner_player_id as ownerPlayerId",
+        "building_id as buildingId",
+      ])
+      .executeTakeFirst();
+
+    return result as MapTile | null;
+  } catch (err) {
+    logError(`Ошибка обновления тайла: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return null;
+  }
+}
+
+export async function updateTileById(
+  cellId: string,
+  updates: {
+    ownerPlayerId?: string | null;
+    isCapital?: boolean;
+    buildingId?: string | null;
+  }
+): Promise<MapTile | null> {
+  try {
+    const updateValues: Record<string, any> = {};
+
+    if (updates.ownerPlayerId !== undefined) {
+      updateValues.owner_player_id = updates.ownerPlayerId;
+    }
+    if (updates.isCapital !== undefined) {
+      updateValues.is_capital = updates.isCapital;
+    }
+    if (updates.buildingId !== undefined) {
+      updateValues.building_id = updates.buildingId;
+    }
+
+    const result = await db
+      .updateTable("map")
+      .set(updateValues)
+      .where("id", "=", cellId)
       .returning([
         "id",
         "world_id as worldId",
