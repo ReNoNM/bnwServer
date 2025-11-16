@@ -5,6 +5,7 @@ import { registerMapHandlers } from "./mapHandlers";
 import { log } from "../../utils/logger";
 import { registerPlayerHandlers } from "./playerHandlers";
 import { registerBuldingHandlers } from "./buldingHandlers";
+import { registerTimeHandlers } from "./timeHandlers";
 
 // Регистрация всех обработчиков маршрутов
 export function registerAllHandlers(): void {
@@ -15,6 +16,7 @@ export function registerAllHandlers(): void {
   registerMapHandlers();
   registerPlayerHandlers();
   registerBuldingHandlers();
+  registerTimeHandlers();
 
   log("Все обработчики маршрутов зарегистрированы");
 }

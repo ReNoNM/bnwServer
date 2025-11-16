@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Time Manager Test Client</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Arial, sans-serif;
+        margin: 0;
+        padding: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+      }
+
+      .container {
+        max-width: 1200px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        color: white;
+        text-align: center;
+        margin-bottom: 30px;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+
+      .card {
+        background: white;
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+      }
+
+      .connection-panel {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+
+      input[type="text"],
+      input[type="email"],
+      input[type="password"] {
+        flex: 1;
+        padding: 10px;
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        font-size: 14px;
+      }
+
+      button {
+        padding: 10px 20px;
+        background: linear-gradient(135deg, #667eea, #764ba2);
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+        font-weight: bold;
+        transition: transform 0.2s;
+      }
+
+      button:hover:not(:disabled) {
+        transform: translateY(-2px);
+      }
+
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+
+      .status {
+        display: inline-block;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-weight: bold;
+        margin-left: 10px;
+      }
+
+      .status.connected {
+        background: #4caf50;
+        color: white;
+      }
+
+      .status.disconnected {
+        background: #f44336;
+        color: white;
+      }
+
+      .cycle-display {
+        font-size: 48px;
+        font-weight: bold;
+        text-align: center;
+        color: #667eea;
+        margin: 20px 0;
+      }
+
+      .cycle-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .info-item {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+      }
+
+      .info-label {
+        color: #666;
+        font-size: 12px;
+        margin-bottom: 5px;
+      }
+
+      .info-value {
+        color: #333;
+        font-size: 24px;
+        font-weight: bold;
+      }
+
+      .task-panel {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-top: 20px;
+      }
+
+      .task-list {
+        margin-top: 20px;
+        max-height: 200px;
+        overflow-y: auto;
+      }
+
+      .task-item {
+        background: #f9f9f9;
+        padding: 10px;
+        border-radius: 5px;
+        margin-bottom: 10px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .countdown {
+        color: #667eea;
+        font-weight: bold;
+      }
+
+      #messages {
+        background: #f5f5f5;
+        padding: 15px;
+        border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 20px;
+      }
+
+      .message {
+        padding: 8px;
+        margin-bottom: 5px;
+        border-left: 3px solid #667eea;
+        background: white;
+        border-radius: 3px;
+        font-size: 14px;
+      }
+
+      .message.error {
+        border-left-color: #f44336;
+        background: #ffebee;
+      }
+
+      .message.success {
+        border-left-color: #4caf50;
+        background: #e8f5e9;
+      }
+
+      .auth-panel {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 20px;
+      }
+
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      .stat-item {
+        background: #f0f0f0;
+        padding: 10px;
+        border-radius: 5px;
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>🕐 Time Manager Test Client</h1>
+
+      <!-- Подключение -->
+      <div class="card">
+        <h2>Подключение</h2>
+        <div class="connection-panel">
+          <input type="text" id="serverUrl" value="ws://localhost:3000" placeholder="WebSocket URL" />
+          <button id="connectBtn">Подключиться</button>
+          <button id="disconnectBtn" disabled>Отключиться</button>
+          <span class="status disconnected" id="connectionStatus">Отключено</span>
+        </div>
+      </div>
+
+      <!-- Авторизация -->
+      <div class="card" id="authCard" style="display: none">
+        <h2>Авторизация</h2>
+        <div class="auth-panel">
+          <div>
+            <h3>Вход</h3>
+            <input type="email" id="loginEmail" placeholder="Email" />
+            <input type="password" id="loginPassword" placeholder="Пароль" style="margin-top: 10px" />
+            <button id="loginBtn" style="margin-top: 10px; width: 100%">Войти</button>
+          </div>
+          <div>
+            <h3>Регистрация</h3>
+            <input type="email" id="registerEmail" placeholder="Email" />
+            <input type="password" id="registerPassword" placeholder="Пароль" style="margin-top: 10px" />
+            <button id="registerBtn" style="margin-top: 10px; width: 100%">Регистрация</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Игровой цикл -->
+      <div class="card" id="cycleCard" style="display: none">
+        <h2>Игровой цикл</h2>
+        <div class="cycle-display" id="cycleDisplay">Цикл: 0</div>
+        <div class="cycle-info">
+          <div class="info-item">
+            <div class="info-label">Последнее обновление</div>
+            <div class="info-value" id="lastUpdate">-</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Следующий цикл через</div>
+            <div class="info-value countdown" id="nextCycle">-</div>
+          </div>
+          <div class="info-item">
+            <div class="info-label">Интервал</div>
+            <div class="info-value" id="cycleInterval">30 сек</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 20px">
+          <button id="getCycleBtn">Получить текущий цикл</button>
+          <button id="getStatsBtn">Получить статистику</button>
+          <input type="number" id="newInterval" value="30" min="1" max="3600" style="width: 80px; margin-left: 10px" />
+          <button id="setIntervalBtn">Изменить интервал</button>
+        </div>
+      </div>
+
+      <!-- Тестовые задачи -->
+      <div class="card" id="tasksCard" style="display: none">
+        <h2>Тестовые задачи</h2>
+        <div class="task-panel">
+          <input type="number" id="taskDelay" value="10" min="1" max="300" placeholder="Задержка (сек)" />
+          <input type="text" id="taskMessage" value="Тестовая задача завершена!" placeholder="Сообщение" />
+          <button id="createTaskBtn">Создать задачу</button>
+        </div>
+        <div class="task-list" id="taskList"></div>
+      </div>
+
+      <!-- Статистика -->
+      <div class="card" id="statsCard" style="display: none">
+        <h2>Статистика TimeManager</h2>
+        <div class="stats-grid" id="statsGrid">
+          <!-- Заполняется динамически -->
+        </div>
+      </div>
+
+      <!-- Сообщения -->
+      <div class="card">
+        <h2>Сообщения</h2>
+        <button id="clearMessages">Очистить</button>
+        <div id="messages"></div>
+      </div>
+    </div>
+
+    <script>
+      let socket = null;
+      let isAuthenticated = false;
+      let currentCycle = 0;
+      let cycleInterval = 30;
+      let nextCycleTime = null;
+      let tasks = new Map();
+
+      // Элементы DOM
+      const serverUrl = document.getElementById("serverUrl");
+      const connectBtn = document.getElementById("connectBtn");
+      const disconnectBtn = document.getElementById("disconnectBtn");
+      const connectionStatus = document.getElementById("connectionStatus");
+      const messages = document.getElementById("messages");
+      const authCard = document.getElementById("authCard");
+      const cycleCard = document.getElementById("cycleCard");
+      const tasksCard = document.getElementById("tasksCard");
+      const statsCard = document.getElementById("statsCard");
+      const cycleDisplay = document.getElementById("cycleDisplay");
+      const lastUpdate = document.getElementById("lastUpdate");
+      const nextCycle = document.getElementById("nextCycle");
+      const cycleIntervalDisplay = document.getElementById("cycleInterval");
+      const taskList = document.getElementById("taskList");
+      const statsGrid = document.getElementById("statsGrid");
+
+      // Функция добавления сообщения
+      function addMessage(text, type = "info") {
+        const msg = document.createElement("div");
+        msg.className = `message ${type}`;
+        msg.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+        messages.insertBefore(msg, messages.firstChild);
+
+        // Ограничиваем количество сообщений
+        while (messages.children.length > 50) {
+          messages.removeChild(messages.lastChild);
+        }
+      }
+
+      // Обновление таймера до следующего цикла
+      function updateCountdown() {
+        if (nextCycleTime) {
+          const remaining = Math.max(0, Math.floor((nextCycleTime - Date.now()) / 1000));
+          nextCycle.textContent = `${remaining} сек`;
+        }
+
+        // Обновляем таймеры задач
+        tasks.forEach((task, id) => {
+          const remaining = Math.max(0, Math.floor((task.executeAt - Date.now()) / 1000));
+          const countdownEl = document.getElementById(`countdown-${id}`);
+          if (countdownEl) {
+            countdownEl.textContent = `${remaining} сек`;
+          }
+          if (remaining === 0) {
+            tasks.delete(id);
+            updateTaskList();
+          }
+        });
+      }
+
+      // Обновление списка задач
+      function updateTaskList() {
+        taskList.innerHTML = "";
+        tasks.forEach((task, id) => {
+          const item = document.createElement("div");
+          item.className = "task-item";
+          item.innerHTML = `
+                    <span>${task.message}</span>
+                    <span class="countdown" id="countdown-${id}">-</span>
+                    <button onclick="cancelTask('${id}')">Отменить</button>
+                `;
+          taskList.appendChild(item);
+        });
+      }
+
+      // Отмена задачи
+      window.cancelTask = function (taskId) {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          socket.send(
+            JSON.stringify({
+              action: "time/cancelTask",
+              data: { taskId },
+            })
+          );
+        }
+      };
+
+      // Подключение к серверу
+      connectBtn.addEventListener("click", () => {
+        const url = serverUrl.value;
+        if (!url) {
+          addMessage("Введите URL сервера", "error");
+          return;
+        }
+
+        try {
+          socket = new WebSocket(url);
+
+          socket.onopen = () => {
+            connectionStatus.textContent = "Подключено";
+            connectionStatus.className = "status connected";
+            connectBtn.disabled = true;
+            disconnectBtn.disabled = false;
+            authCard.style.display = "block";
+            addMessage("Подключено к серверу", "success");
+          };
+
+          socket.onclose = () => {
+            connectionStatus.textContent = "Отключено";
+            connectionStatus.className = "status disconnected";
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            authCard.style.display = "none";
+            cycleCard.style.display = "none";
+            tasksCard.style.display = "none";
+            statsCard.style.display = "none";
+            isAuthenticated = false;
+            addMessage("Отключено от сервера", "error");
+          };
+
+          socket.onmessage = (event) => {
+            try {
+              const message = JSON.parse(event.data);
+              handleMessage(message);
+            } catch (e) {
+              console.error("Ошибка парсинга:", e);
+            }
+          };
+
+          socket.onerror = (error) => {
+            addMessage(`Ошибка WebSocket: ${error}`, "error");
+          };
+        } catch (error) {
+          addMessage(`Ошибка подключения: ${error}`, "error");
+        }
+      });
+
+      // Отключение от сервера
+      disconnectBtn.addEventListener("click", () => {
+        if (socket) {
+          socket.close();
+        }
+      });
+
+      // Обработка входящих сообщений
+      function handleMessage(message) {
+        const { action, data } = message;
+
+        switch (action) {
+          case "system/connect":
+            addMessage(data.message, "success");
+            break;
+
+          case "auth/loginSuccess":
+            isAuthenticated = true;
+            authCard.style.display = "none";
+            cycleCard.style.display = "block";
+            tasksCard.style.display = "block";
+            statsCard.style.display = "block";
+            addMessage(`Вход выполнен: ${data.player.username}`, "success");
+            // Запрашиваем текущий цикл
+            socket.send(JSON.stringify({ action: "time/getCycle" }));
+            break;
+
+          case "auth/loginFailed":
+            addMessage(`Ошибка входа: ${data.error}`, "error");
+            break;
+
+          case "game/cycleUpdate":
+            currentCycle = data.cycle;
+            cycleDisplay.textContent = `Цикл: ${currentCycle}`;
+            lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+            nextCycleTime = Date.now() + data.nextCycleIn * 1000;
+            cycleInterval = data.nextCycleIn;
+            cycleIntervalDisplay.textContent = `${cycleInterval} сек`;
+            addMessage(`Цикл обновлен: ${currentCycle}`);
+            break;
+
+          case "time/getCycleSuccess":
+            currentCycle = data.cycle;
+            cycleDisplay.textContent = `Цикл: ${currentCycle}`;
+            lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
+            addMessage(`Текущий цикл: ${currentCycle}`, "success");
+            break;
+
+          case "time/setCycleIntervalSuccess":
+            cycleInterval = data.interval;
+            cycleIntervalDisplay.textContent = `${cycleInterval} сек`;
+            addMessage(data.message, "success");
+            break;
+
+          case "time/getStatsSuccess":
+            updateStats(data);
+            break;
+
+          case "time/createTestTaskSuccess":
+            tasks.set(data.taskId, {
+              executeAt: data.executeAt,
+              message: taskMessage.value,
+            });
+            updateTaskList();
+            addMessage(data.message, "success");
+            break;
+
+          case "time/taskCompleted":
+            addMessage(`✅ ${data.message}`, "success");
+            break;
+
+          case "time/cancelTaskSuccess":
+            tasks.delete(data.taskId);
+            updateTaskList();
+            addMessage(data.message, "success");
+            break;
+
+          case "system/ping":
+            socket.send(
+              JSON.stringify({
+                action: "system/pong",
+                data: { timestamp: Date.now() },
+              })
+            );
+            break;
+
+          default:
+            if (action.includes("Failed")) {
+              addMessage(`Ошибка: ${data.error || "Неизвестная ошибка"}`, "error");
+            } else {
+              addMessage(`${action}: ${JSON.stringify(data)}`);
+            }
+        }
+      }
+
+      // Обновление статистики
+      function updateStats(stats) {
+        statsGrid.innerHTML = "";
+
+        const items = [
+          { label: "Периодические события", value: stats.periodicEvents },
+          { label: "Одноразовые события", value: stats.onceEvents },
+          { label: "Buckets", value: stats.buckets },
+          { label: "Текущий цикл", value: stats.gameCycle.current },
+          { label: "Интервал цикла", value: `${stats.gameCycle.interval} сек` },
+        ];
+
+        items.forEach((item) => {
+          const div = document.createElement("div");
+          div.className = "stat-item";
+          div.innerHTML = `
+                    <div style="font-size: 12px; color: #666;">${item.label}</div>
+                    <div style="font-size: 18px; font-weight: bold; color: #333;">${item.value}</div>
+                `;
+          statsGrid.appendChild(div);
+        });
+
+        addMessage("Статистика обновлена", "success");
+      }
+
+      // Обработчики кнопок
+      document.getElementById("loginBtn").addEventListener("click", () => {
+        const email = document.getElementById("loginEmail").value;
+        const password = document.getElementById("loginPassword").value;
+
+        if (!email || !password) {
+          addMessage("Введите email и пароль", "error");
+          return;
+        }
+
+        socket.send(
+          JSON.stringify({
+            action: "auth/login",
+            data: { email, password },
+          })
+        );
+      });
+
+      document.getElementById("getCycleBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getCycle" }));
+      });
+
+      document.getElementById("getStatsBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getStats" }));
+      });
+
+      document.getElementById("setIntervalBtn").addEventListener("click", () => {
+        const interval = parseInt(document.getElementById("newInterval").value);
+        socket.send(
+          JSON.stringify({
+            action: "time/setCycleInterval",
+            data: { interval },
+          })
+        );
+      });
+
+      document.getElementById("createTaskBtn").addEventListener("click", () => {
+        const delay = parseInt(document.getElementById("taskDelay").value);
+        const message = document.getElementById("taskMessage").value;
+
+        socket.send(
+          JSON.stringify({
+            action: "time/createTestTask",
+            data: { delay, message },
+          })
+        );
+      });
+
+      document.getElementById("clearMessages").addEventListener("click", () => {
+        messages.innerHTML = "";
+      });
+
+      // Обновляем счетчики каждую секунду
+      setInterval(updateCountdown, 1000);
+    </script>
+  </body>
+</html>

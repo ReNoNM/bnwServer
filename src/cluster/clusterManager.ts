@@ -2,7 +2,8 @@ import cluster from "cluster";
 import os from "os";
 import { startServer } from "../network/websocketServer";
 import { log, error as logError } from "../utils/logger";
-import { initializeDatabase } from "../db"; // Импортируем функцию инициализации базы данных
+import { initializeDatabase } from "../db";
+import { initializeTimeManager, stopTimeManager } from "../game/engine/timeManager";
 
 // Определяем оптимальное количество рабочих процессов
 const determineWorkerCount = (): number => {
@@ -94,6 +95,10 @@ export function startCluster(): void {
       // Инициализируем базу данных перед запуском сервера
       initializeDatabase()
         .then(() => {
+          // Инициализируем TimeManager
+          initializeTimeManager();
+          log("TimeManager инициализирован");
+
           // После успешной инициализации запускаем сервер
           startServer();
           log(`Рабочий процесс ${process.pid} запущен`);
@@ -122,6 +127,17 @@ export function startCluster(): void {
         if (process.env.NODE_ENV === "production") {
           process.exit(1);
         }
+      });
+
+      // Корректная остановка TimeManager при завершении процесса
+      process.on("SIGTERM", () => {
+        stopTimeManager();
+        process.exit(0);
+      });
+
+      process.on("SIGINT", () => {
+        stopTimeManager();
+        process.exit(0);
       });
     } catch (error) {
       logError(`Ошибка запуска рабочего процесса ${process.pid}: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
