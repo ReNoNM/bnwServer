@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Time Manager Test Client</title>
+    <title>Game Calendar & Time Manager Test</title>
     <style>
       body {
         font-family: "Segoe UI", Arial, sans-serif;
@@ -14,7 +14,7 @@
       }
 
       .container {
-        max-width: 1200px;
+        max-width: 1400px;
         margin: 0 auto;
       }
 
@@ -42,8 +42,8 @@
 
       input[type="text"],
       input[type="email"],
-      input[type="password"] {
-        flex: 1;
+      input[type="password"],
+      input[type="number"] {
         padding: 10px;
         border: 1px solid #ddd;
         border-radius: 5px;
@@ -88,19 +88,20 @@
         color: white;
       }
 
-      .cycle-display {
+      .calendar-display {
+        text-align: center;
         font-size: 48px;
         font-weight: bold;
-        text-align: center;
         color: #667eea;
         margin: 20px 0;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
       }
 
-      .cycle-info {
+      .calendar-info {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 15px;
-        margin-top: 20px;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin: 20px 0;
       }
 
       .info-item {
@@ -111,77 +112,48 @@
       }
 
       .info-label {
-        color: #666;
         font-size: 12px;
+        color: #666;
         margin-bottom: 5px;
       }
 
       .info-value {
-        color: #333;
-        font-size: 24px;
+        font-size: 20px;
         font-weight: bold;
-      }
-
-      .task-panel {
-        display: flex;
-        gap: 10px;
-        align-items: center;
-        margin-top: 20px;
-      }
-
-      .task-list {
-        margin-top: 20px;
-        max-height: 200px;
-        overflow-y: auto;
-      }
-
-      .task-item {
-        background: #f9f9f9;
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 10px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+        color: #333;
       }
 
       .countdown {
         color: #667eea;
-        font-weight: bold;
-      }
-
-      #messages {
-        background: #f5f5f5;
-        padding: 15px;
-        border-radius: 8px;
-        max-height: 300px;
-        overflow-y: auto;
-        margin-top: 20px;
-      }
-
-      .message {
-        padding: 8px;
-        margin-bottom: 5px;
-        border-left: 3px solid #667eea;
-        background: white;
-        border-radius: 3px;
-        font-size: 14px;
-      }
-
-      .message.error {
-        border-left-color: #f44336;
-        background: #ffebee;
-      }
-
-      .message.success {
-        border-left-color: #4caf50;
-        background: #e8f5e9;
       }
 
       .auth-panel {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 20px;
+      }
+
+      .auth-panel input {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .settings-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 15px;
+        margin: 20px 0;
+      }
+
+      .setting-item {
+        display: flex;
+        flex-direction: column;
+      }
+
+      .setting-item label {
+        font-size: 12px;
+        color: #666;
+        margin-bottom: 5px;
       }
 
       .stats-grid {
@@ -197,17 +169,62 @@
         border-radius: 5px;
         text-align: center;
       }
+
+      .task-panel {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+      }
+
+      .task-list {
+        margin-top: 15px;
+      }
+
+      .task-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        background: #f5f5f5;
+        border-radius: 5px;
+        margin-bottom: 5px;
+      }
+
+      #messages {
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 15px;
+      }
+
+      .message {
+        padding: 8px;
+        margin-bottom: 5px;
+        border-left: 3px solid #2196f3;
+        background: #e3f2fd;
+        border-radius: 3px;
+        font-size: 14px;
+      }
+
+      .message.error {
+        border-left-color: #f44336;
+        background: #ffebee;
+      }
+
+      .message.success {
+        border-left-color: #4caf50;
+        background: #e8f5e9;
+      }
     </style>
   </head>
   <body>
     <div class="container">
-      <h1>🕐 Time Manager Test Client</h1>
+      <h1>🗓️ Game Calendar & Time Manager Test</h1>
 
       <!-- Подключение -->
       <div class="card">
         <h2>Подключение</h2>
         <div class="connection-panel">
-          <input type="text" id="serverUrl" value="ws://localhost:3000" placeholder="WebSocket URL" />
+          <input type="text" id="serverUrl" value="ws://localhost:8080" placeholder="WebSocket URL" style="flex: 1" />
           <button id="connectBtn">Подключиться</button>
           <button id="disconnectBtn" disabled>Отключиться</button>
           <span class="status disconnected" id="connectionStatus">Отключено</span>
@@ -233,55 +250,88 @@
         </div>
       </div>
 
-      <!-- Игровой цикл -->
-      <div class="card" id="cycleCard" style="display: none">
-        <h2>Игровой цикл</h2>
-        <div class="cycle-display" id="cycleDisplay">Цикл: 0</div>
-        <div class="cycle-info">
+      <!-- Игровой календарь -->
+      <div class="card" id="calendarCard" style="display: none">
+        <h2>📅 Игровой календарь</h2>
+        <div class="calendar-display" id="calendarDisplay">Год 1, Месяц 1, День 1</div>
+        <div class="calendar-info">
           <div class="info-item">
             <div class="info-label">Последнее обновление</div>
             <div class="info-value" id="lastUpdate">-</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Следующий цикл через</div>
-            <div class="info-value countdown" id="nextCycle">-</div>
+            <div class="info-label">Следующий день через</div>
+            <div class="info-value countdown" id="nextDayCountdown">-</div>
           </div>
           <div class="info-item">
-            <div class="info-label">Интервал</div>
-            <div class="info-value" id="cycleInterval">30 сек</div>
+            <div class="info-label">Всего дней пройдено</div>
+            <div class="info-value" id="totalDays">0</div>
           </div>
         </div>
 
         <div style="margin-top: 20px">
-          <button id="getCycleBtn">Получить текущий цикл</button>
-          <button id="getStatsBtn">Получить статистику</button>
-          <input type="number" id="newInterval" value="30" min="1" max="3600" style="width: 80px; margin-left: 10px" />
-          <button id="setIntervalBtn">Изменить интервал</button>
+          <button id="getDateBtn">Получить дату</button>
+          <button id="getCycleStatsBtn">Статистика календаря</button>
+        </div>
+
+        <!-- Настройки календаря (Админ) -->
+        <div style="margin-top: 30px; border-top: 2px solid #ddd; padding-top: 20px">
+          <h3>⚙️ Настройки календаря (Админ)</h3>
+          <div class="settings-grid">
+            <div class="setting-item">
+              <label>Месяцев в году:</label>
+              <input type="number" id="monthsPerYear" value="12" min="1" max="24" />
+            </div>
+            <div class="setting-item">
+              <label>Дней в месяце:</label>
+              <input type="number" id="daysPerMonth" value="30" min="1" max="60" />
+            </div>
+            <div class="setting-item">
+              <label>Секунд в дне:</label>
+              <input type="number" id="secondsPerDay" value="30" min="1" max="3600" />
+            </div>
+          </div>
+          <button id="updateSettingsBtn" style="margin-top: 10px">Применить настройки</button>
+
+          <div style="margin-top: 20px">
+            <h4>Установить дату вручную</h4>
+            <div style="display: flex; gap: 10px">
+              <input type="number" id="setYear" value="1" min="1" placeholder="Год" />
+              <input type="number" id="setMonth" value="1" min="1" placeholder="Месяц" />
+              <input type="number" id="setDay" value="1" min="1" placeholder="День" />
+              <button id="setDateBtn">Установить</button>
+            </div>
+          </div>
         </div>
       </div>
 
       <!-- Тестовые задачи -->
       <div class="card" id="tasksCard" style="display: none">
-        <h2>Тестовые задачи</h2>
+        <h2>⏱️ Тестовые задачи</h2>
         <div class="task-panel">
-          <input type="number" id="taskDelay" value="10" min="1" max="300" placeholder="Задержка (сек)" />
-          <input type="text" id="taskMessage" value="Тестовая задача завершена!" placeholder="Сообщение" />
+          <input type="number" id="taskDelay" value="10" min="1" max="300" placeholder="Задержка (сек)" style="width: 120px" />
+          <input type="text" id="taskMessage" value="Задача завершена!" placeholder="Сообщение" style="flex: 1" />
           <button id="createTaskBtn">Создать задачу</button>
         </div>
         <div class="task-list" id="taskList"></div>
+
+        <div style="margin-top: 20px">
+          <button id="getPlayerEventsBtn">Получить мои события</button>
+        </div>
       </div>
 
       <!-- Статистика -->
       <div class="card" id="statsCard" style="display: none">
-        <h2>Статистика TimeManager</h2>
+        <h2>📊 Статистика TimeManager</h2>
         <div class="stats-grid" id="statsGrid">
           <!-- Заполняется динамически -->
         </div>
+        <button id="getStatsBtn" style="margin-top: 15px">Обновить статистику</button>
       </div>
 
       <!-- Сообщения -->
       <div class="card">
-        <h2>Сообщения</h2>
+        <h2>📝 Сообщения</h2>
         <button id="clearMessages">Очистить</button>
         <div id="messages"></div>
       </div>
@@ -290,9 +340,9 @@
     <script>
       let socket = null;
       let isAuthenticated = false;
-      let currentCycle = 0;
-      let cycleInterval = 30;
-      let nextCycleTime = null;
+      let currentDate = { year: 1, month: 1, day: 1 };
+      let calendarSettings = { monthsPerYear: 12, daysPerMonth: 30, secondsPerDay: 30 };
+      let nextDayTime = null;
       let tasks = new Map();
 
       // Элементы DOM
@@ -302,13 +352,13 @@
       const connectionStatus = document.getElementById("connectionStatus");
       const messages = document.getElementById("messages");
       const authCard = document.getElementById("authCard");
-      const cycleCard = document.getElementById("cycleCard");
+      const calendarCard = document.getElementById("calendarCard");
       const tasksCard = document.getElementById("tasksCard");
       const statsCard = document.getElementById("statsCard");
-      const cycleDisplay = document.getElementById("cycleDisplay");
+      const calendarDisplay = document.getElementById("calendarDisplay");
       const lastUpdate = document.getElementById("lastUpdate");
-      const nextCycle = document.getElementById("nextCycle");
-      const cycleIntervalDisplay = document.getElementById("cycleInterval");
+      const nextDayCountdown = document.getElementById("nextDayCountdown");
+      const totalDays = document.getElementById("totalDays");
       const taskList = document.getElementById("taskList");
       const statsGrid = document.getElementById("statsGrid");
 
@@ -319,17 +369,28 @@
         msg.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
         messages.insertBefore(msg, messages.firstChild);
 
-        // Ограничиваем количество сообщений
         while (messages.children.length > 50) {
           messages.removeChild(messages.lastChild);
         }
       }
 
-      // Обновление таймера до следующего цикла
+      // Обновление отображения календаря
+      function updateCalendarDisplay() {
+        calendarDisplay.textContent = `Год ${currentDate.year}, Месяц ${currentDate.month}, День ${currentDate.day}`;
+
+        // Вычисляем общее количество дней
+        const total =
+          (currentDate.year - 1) * calendarSettings.monthsPerYear * calendarSettings.daysPerMonth +
+          (currentDate.month - 1) * calendarSettings.daysPerMonth +
+          currentDate.day;
+        totalDays.textContent = total;
+      }
+
+      // Обновление таймера до следующего дня
       function updateCountdown() {
-        if (nextCycleTime) {
-          const remaining = Math.max(0, Math.floor((nextCycleTime - Date.now()) / 1000));
-          nextCycle.textContent = `${remaining} сек`;
+        if (nextDayTime) {
+          const remaining = Math.max(0, Math.floor((nextDayTime - Date.now()) / 1000));
+          nextDayCountdown.textContent = `${remaining} сек`;
         }
 
         // Обновляем таймеры задач
@@ -353,21 +414,21 @@
           const item = document.createElement("div");
           item.className = "task-item";
           item.innerHTML = `
-                    <span>${task.message}</span>
-                    <span class="countdown" id="countdown-${id}">-</span>
-                    <button onclick="cancelTask('${id}')">Отменить</button>
-                `;
+            <span><strong>${task.name}:</strong> ${task.message}</span>
+            <span class="countdown" id="countdown-${id}">-</span>
+            <button onclick="cancelTask('${id}')">Отменить</button>
+          `;
           taskList.appendChild(item);
         });
       }
 
       // Отмена задачи
-      window.cancelTask = function (taskId) {
+      window.cancelTask = function (eventId) {
         if (socket && socket.readyState === WebSocket.OPEN) {
           socket.send(
             JSON.stringify({
               action: "time/cancelTask",
-              data: { taskId },
+              data: { eventId },
             })
           );
         }
@@ -399,7 +460,7 @@
             connectBtn.disabled = false;
             disconnectBtn.disabled = true;
             authCard.style.display = "none";
-            cycleCard.style.display = "none";
+            calendarCard.style.display = "none";
             tasksCard.style.display = "none";
             statsCard.style.display = "none";
             isAuthenticated = false;
@@ -416,7 +477,7 @@
           };
 
           socket.onerror = (error) => {
-            addMessage(`Ошибка WebSocket: ${error}`, "error");
+            addMessage(`Ошибка WebSocket`, "error");
           };
         } catch (error) {
           addMessage(`Ошибка подключения: ${error}`, "error");
@@ -432,7 +493,13 @@
 
       // Обработка входящих сообщений
       function handleMessage(message) {
-        const { action, data } = message;
+        const { action, data, success } = message;
+
+        // Общая обработка ошибок
+        if (success === false) {
+          addMessage(`Ошибка ${action}: ${data?.message || "неизвестная ошибка"}`, "error");
+          return;
+        }
 
         switch (action) {
           case "system/connect":
@@ -442,108 +509,132 @@
           case "auth/loginSuccess":
             isAuthenticated = true;
             authCard.style.display = "none";
-            cycleCard.style.display = "block";
+            calendarCard.style.display = "block";
             tasksCard.style.display = "block";
             statsCard.style.display = "block";
             addMessage(`Вход выполнен: ${data.player.username}`, "success");
-            // Запрашиваем текущий цикл
-            socket.send(JSON.stringify({ action: "time/getCycle" }));
+            // Запрашиваем текущую дату
+            socket.send(JSON.stringify({ action: "time/getDate" }));
+            socket.send(JSON.stringify({ action: "time/getStats" }));
             break;
 
           case "auth/loginFailed":
-            addMessage(`Ошибка входа: ${data.error}`, "error");
+            addMessage(`Ошибка входа: ${data.message}`, "error");
             break;
 
-          case "game/cycleUpdate":
-            currentCycle = data.cycle;
-            cycleDisplay.textContent = `Цикл: ${currentCycle}`;
+          case "time/getDate":
+            if (success) {
+              currentDate = { year: data.year, month: data.month, day: data.day };
+              calendarSettings = data.settings;
+              lastUpdate.textContent = new Date(data.lastUpdate).toLocaleTimeString();
+              nextDayTime = Date.now() + calendarSettings.secondsPerDay * 1000;
+
+              // Обновляем поля настроек
+              document.getElementById("monthsPerYear").value = calendarSettings.monthsPerYear;
+              document.getElementById("daysPerMonth").value = calendarSettings.daysPerMonth;
+              document.getElementById("secondsPerDay").value = calendarSettings.secondsPerDay;
+
+              updateCalendarDisplay();
+              addMessage("Дата обновлена", "success");
+            }
+            break;
+
+          case "game/dateUpdate":
+            currentDate = { year: data.year, month: data.month, day: data.day };
             lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-            nextCycleTime = Date.now() + data.nextCycleIn * 1000;
-            cycleInterval = data.nextCycleIn;
-            cycleIntervalDisplay.textContent = `${cycleInterval} сек`;
-            addMessage(`Цикл обновлен: ${currentCycle}`);
+            nextDayTime = Date.now() + data.nextDayIn * 1000;
+            updateCalendarDisplay();
+            addMessage(`Новый день! Год ${data.year}, Месяц ${data.month}, День ${data.day}`, "success");
             break;
 
-          case "time/getCycleSuccess":
-            currentCycle = data.cycle;
-            cycleDisplay.textContent = `Цикл: ${currentCycle}`;
-            lastUpdate.textContent = new Date(data.timestamp).toLocaleTimeString();
-            addMessage(`Текущий цикл: ${currentCycle}`, "success");
+          case "time/getCycleStats":
+            if (success) {
+              addMessage(`Статистика календаря: ${data.totalDays} дней пройдено`, "success");
+            }
             break;
 
-          case "time/setCycleIntervalSuccess":
-            cycleInterval = data.interval;
-            cycleIntervalDisplay.textContent = `${cycleInterval} сек`;
-            addMessage(data.message, "success");
+          case "time/setCalendarSettings":
+            if (success) {
+              addMessage("Настройки календаря обновлены!", "success");
+              socket.send(JSON.stringify({ action: "time/getDate" }));
+            }
             break;
 
-          case "time/getStatsSuccess":
-            updateStats(data);
+          case "time/setDate":
+            if (success) {
+              addMessage(`Дата установлена: Год ${data.year}, Месяц ${data.month}, День ${data.day}`, "success");
+              socket.send(JSON.stringify({ action: "time/getDate" }));
+            }
             break;
 
-          case "time/createTestTaskSuccess":
-            tasks.set(data.taskId, {
-              executeAt: data.executeAt,
-              message: taskMessage.value,
-            });
-            updateTaskList();
-            addMessage(data.message, "success");
+          case "time/createTestTask":
+            if (success) {
+              const task = {
+                name: "testTask",
+                message: document.getElementById("taskMessage").value,
+                executeAt: Date.now() + data.delay * 1000,
+              };
+              tasks.set(data.eventId, task);
+              updateTaskList();
+              addMessage(`Задача создана: ${data.eventId}`, "success");
+            }
             break;
 
-          case "time/taskCompleted":
+          case "time/testTaskComplete":
             addMessage(`✅ ${data.message}`, "success");
             break;
 
-          case "time/cancelTaskSuccess":
-            tasks.delete(data.taskId);
-            updateTaskList();
-            addMessage(data.message, "success");
+          case "time/cancelTask":
+            if (success) {
+              tasks.delete(data.eventId);
+              updateTaskList();
+              addMessage("Задача отменена", "success");
+            }
             break;
 
-          case "system/ping":
-            socket.send(
-              JSON.stringify({
-                action: "system/pong",
-                data: { timestamp: Date.now() },
-              })
-            );
+          case "time/getPlayerEvents":
+            if (success) {
+              addMessage(`У вас ${data.count} активных событий`, "success");
+              console.log("События:", data.events);
+            }
+            break;
+
+          case "time/getStats":
+            if (success) {
+              updateStatsDisplay(data);
+            }
             break;
 
           default:
-            if (action.includes("Failed")) {
-              addMessage(`Ошибка: ${data.error || "Неизвестная ошибка"}`, "error");
-            } else {
-              addMessage(`${action}: ${JSON.stringify(data)}`);
-            }
+            console.log("Неизвестное сообщение:", message);
         }
       }
 
       // Обновление статистики
-      function updateStats(stats) {
+      function updateStatsDisplay(stats) {
         statsGrid.innerHTML = "";
 
         const items = [
-          { label: "Периодические события", value: stats.periodicEvents },
-          { label: "Одноразовые события", value: stats.onceEvents },
-          { label: "Buckets", value: stats.buckets },
-          { label: "Текущий цикл", value: stats.gameCycle.current },
-          { label: "Интервал цикла", value: `${stats.gameCycle.interval} сек` },
+          { label: "Периодические события", value: stats.periodicEvents || 0 },
+          { label: "Одноразовые события", value: stats.onceEvents || 0 },
+          { label: "Приостановленные", value: stats.pausedEvents || 0 },
+          { label: "Buckets", value: stats.buckets || 0 },
         ];
 
         items.forEach((item) => {
           const div = document.createElement("div");
           div.className = "stat-item";
           div.innerHTML = `
-                    <div style="font-size: 12px; color: #666;">${item.label}</div>
-                    <div style="font-size: 18px; font-weight: bold; color: #333;">${item.value}</div>
-                `;
+            <div style="font-size: 12px; color: #666;">${item.label}</div>
+            <div style="font-size: 18px; font-weight: bold; color: #333;">${item.value}</div>
+          `;
           statsGrid.appendChild(div);
         });
 
         addMessage("Статистика обновлена", "success");
       }
 
-      // Обработчики кнопок
+      // Обработчики кнопок авторизации
       document.getElementById("loginBtn").addEventListener("click", () => {
         const email = document.getElementById("loginEmail").value;
         const password = document.getElementById("loginPassword").value;
@@ -561,24 +652,42 @@
         );
       });
 
-      document.getElementById("getCycleBtn").addEventListener("click", () => {
-        socket.send(JSON.stringify({ action: "time/getCycle" }));
+      // Обработчики кнопок календаря
+      document.getElementById("getDateBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getDate" }));
       });
 
-      document.getElementById("getStatsBtn").addEventListener("click", () => {
-        socket.send(JSON.stringify({ action: "time/getStats" }));
+      document.getElementById("getCycleStatsBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getCycleStats" }));
       });
 
-      document.getElementById("setIntervalBtn").addEventListener("click", () => {
-        const interval = parseInt(document.getElementById("newInterval").value);
+      document.getElementById("updateSettingsBtn").addEventListener("click", () => {
+        const monthsPerYear = parseInt(document.getElementById("monthsPerYear").value);
+        const daysPerMonth = parseInt(document.getElementById("daysPerMonth").value);
+        const secondsPerDay = parseInt(document.getElementById("secondsPerDay").value);
+
         socket.send(
           JSON.stringify({
-            action: "time/setCycleInterval",
-            data: { interval },
+            action: "time/setCalendarSettings",
+            data: { monthsPerYear, daysPerMonth, secondsPerDay },
           })
         );
       });
 
+      document.getElementById("setDateBtn").addEventListener("click", () => {
+        const year = parseInt(document.getElementById("setYear").value);
+        const month = parseInt(document.getElementById("setMonth").value);
+        const day = parseInt(document.getElementById("setDay").value);
+
+        socket.send(
+          JSON.stringify({
+            action: "time/setDate",
+            data: { year, month, day },
+          })
+        );
+      });
+
+      // Обработчики задач
       document.getElementById("createTaskBtn").addEventListener("click", () => {
         const delay = parseInt(document.getElementById("taskDelay").value);
         const message = document.getElementById("taskMessage").value;
@@ -591,6 +700,16 @@
         );
       });
 
+      document.getElementById("getPlayerEventsBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getPlayerEvents" }));
+      });
+
+      // Статистика
+      document.getElementById("getStatsBtn").addEventListener("click", () => {
+        socket.send(JSON.stringify({ action: "time/getStats" }));
+      });
+
+      // Очистка сообщений
       document.getElementById("clearMessages").addEventListener("click", () => {
         messages.innerHTML = "";
       });

@@ -1,9 +1,10 @@
 import { db } from "../connection";
 import { TimeEvent, TimeEventDTO } from "../models/timeEvent";
 import { log, error as logError } from "../../utils/logger";
+import { sql } from "kysely";
 
 /**
- * Создать новое событие
+ * Создать новое событие или обновить существующее (upsert для persistent событий)
  */
 export async function create(event: TimeEventDTO): Promise<TimeEvent | null> {
   try {
@@ -11,17 +12,28 @@ export async function create(event: TimeEventDTO): Promise<TimeEvent | null> {
       .insertInto("time_events")
       .values({
         ...event,
-        metadata: JSON.stringify(event.metadata || {}),
+        metadata: event.metadata || {}, // ✅ Просто объект
         created_at: new Date(),
         updated_at: new Date(),
       })
+      .onConflict((oc) =>
+        oc.column("id").doUpdateSet({
+          type: event.type,
+          name: event.name,
+          player_id: event.player_id,
+          world_id: event.world_id,
+          execute_at: event.execute_at,
+          interval: event.interval,
+          last_execution: event.last_execution,
+          status: event.status || "active",
+          metadata: event.metadata || {}, // ✅ Просто объект
+          updated_at: new Date(),
+        })
+      )
       .returningAll()
       .executeTakeFirst();
 
-    if (result) {
-      result.metadata = JSON.parse((result.metadata as any) || "{}");
-    }
-
+    // ✅ Kysely автоматически парсит JSONB, не нужен JSON.parse
     return result as TimeEvent | null;
   } catch (err) {
     logError(`Ошибка создания события: ${err}`);
@@ -38,7 +50,7 @@ export async function getActive(): Promise<TimeEvent[]> {
 
     return results.map((r) => ({
       ...r,
-      metadata: JSON.parse((r.metadata as any) || "{}"),
+      metadata: r.metadata || {},
     })) as TimeEvent[];
   } catch (err) {
     logError(`Ошибка получения активных событий: ${err}`);
@@ -55,7 +67,7 @@ export async function getPaused(): Promise<TimeEvent[]> {
 
     return results.map((r) => ({
       ...r,
-      metadata: JSON.parse((r.metadata as any) || "{}"),
+      metadata: r.metadata || {},
     })) as TimeEvent[];
   } catch (err) {
     logError(`Ошибка получения приостановленных событий: ${err}`);
@@ -213,7 +225,7 @@ export async function getByPlayerId(playerId: string): Promise<TimeEvent[]> {
 
     return results.map((r) => ({
       ...r,
-      metadata: JSON.parse((r.metadata as any) || "{}"),
+      metadata: r.metadata || {},
     })) as TimeEvent[];
   } catch (err) {
     logError(`Ошибка получения событий игрока: ${err}`);
@@ -259,6 +271,20 @@ export async function batchUpdateStatus(eventIds: string[], status: "completed" 
     return result.numUpdatedRows > 0;
   } catch (err) {
     logError(`Ошибка пакетного обновления событий: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Удалить событие по ID
+ */
+export async function deleteById(eventId: string): Promise<boolean> {
+  try {
+    const result = await db.deleteFrom("time_events").where("id", "=", eventId).executeTakeFirst();
+
+    return Number(result.numDeletedRows) > 0;
+  } catch (err) {
+    logError(`Ошибка удаления события: ${err}`);
     return false;
   }
 }

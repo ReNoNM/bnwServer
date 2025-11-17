@@ -3,56 +3,141 @@ import { registerHandler } from "../messageDispatcher";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
 import { handleError } from "../../utils/errorHandler";
 import { log } from "../../utils/logger";
-import { getCurrentCycle, setGameCycleInterval, getTimeManagerStats, registerOnceEvent, cancelEvent } from "../../game/engine/timeManager";
+import { getTimeManagerStats, registerOnceEvent, getPlayerEvents, pauseEvent, resumeEvent, unregisterEvent } from "../../game/engine/timeManager";
+import { getCurrentDate, getCalendarSettings, updateCalendarSettings, setDate, getGameCycleStats } from "../../game/engine/gameCycleManager";
 
 /**
- * Получение текущего игрового цикла
+ * Получение текущей даты игрового календаря
  */
-async function handleGetCycle(ws: WebSocket): Promise<void> {
+async function handleGetDate(ws: WebSocket): Promise<void> {
   try {
-    const cycle = getCurrentCycle();
+    const date = getCurrentDate();
+    const settings = getCalendarSettings();
 
-    sendSuccess(ws, "time/getCycle", {
-      cycle,
-      timestamp: Date.now(),
+    sendSuccess(ws, "time/getDate", {
+      year: date.year,
+      month: date.month,
+      day: date.day,
+      lastUpdate: date.lastUpdate,
+      settings: {
+        monthsPerYear: settings.monthsPerYear,
+        daysPerMonth: settings.daysPerMonth,
+        secondsPerDay: settings.secondsPerDay,
+      },
     });
   } catch (error) {
-    handleError(error as Error, "TimeHandlers.getCycle");
-    sendSystemError(ws, "Ошибка при получении игрового цикла");
+    handleError(error as Error, "TimeHandlers.getDate");
+    sendSystemError(ws, "Ошибка при получении даты");
   }
 }
 
 /**
- * Установка интервала цикла (только для админов)
+ * Получение статистики игрового цикла
  */
-async function handleSetCycleInterval(ws: WebSocket, data: any): Promise<void> {
+async function handleGetCycleStats(ws: WebSocket): Promise<void> {
+  try {
+    const stats = getGameCycleStats();
+
+    sendSuccess(ws, "time/getCycleStats", stats);
+  } catch (error) {
+    handleError(error as Error, "TimeHandlers.getCycleStats");
+    sendSystemError(ws, "Ошибка при получении статистики цикла");
+  }
+}
+
+/**
+ * Установка настроек календаря (только для админов)
+ */
+async function handleSetCalendarSettings(ws: WebSocket, data: any): Promise<void> {
   try {
     const playerData = (ws as any).playerData;
 
     // Проверяем права (временно - проверяем просто авторизацию)
     if (!playerData || !playerData.id) {
-      sendError(ws, "time/setCycleInterval", "Требуется авторизация");
+      sendError(ws, "time/setCalendarSettings", "Требуется авторизация");
       return;
     }
 
-    const { interval } = data;
+    const { monthsPerYear, daysPerMonth, secondsPerDay } = data;
 
-    if (!interval || interval < 1 || interval > 3600) {
-      sendError(ws, "time/setCycleInterval", "Некорректный интервал (1-3600 секунд)");
+    if (!monthsPerYear || !daysPerMonth || !secondsPerDay) {
+      sendError(ws, "time/setCalendarSettings", "Не указаны все параметры");
       return;
     }
 
-    setGameCycleInterval(interval);
+    if (monthsPerYear < 1 || monthsPerYear > 24) {
+      sendError(ws, "time/setCalendarSettings", "Месяцев в году должно быть от 1 до 24");
+      return;
+    }
 
-    sendSuccess(ws, "time/setCycleInterval", {
-      message: `Интервал цикла установлен на ${interval} секунд`,
-      interval,
+    if (daysPerMonth < 1 || daysPerMonth > 60) {
+      sendError(ws, "time/setCalendarSettings", "Дней в месяце должно быть от 1 до 60");
+      return;
+    }
+
+    if (secondsPerDay < 1 || secondsPerDay > 3600) {
+      sendError(ws, "time/setCalendarSettings", "Секунд в дне должно быть от 1 до 3600");
+      return;
+    }
+
+    const success = await updateCalendarSettings({
+      monthsPerYear,
+      daysPerMonth,
+      secondsPerDay,
     });
 
-    log(`Интервал цикла изменен на ${interval} секунд пользователем ${playerData.username}`);
+    if (success) {
+      sendSuccess(ws, "time/setCalendarSettings", {
+        message: "Настройки календаря обновлены",
+        settings: { monthsPerYear, daysPerMonth, secondsPerDay },
+      });
+
+      log(`Настройки календаря изменены пользователем ${playerData.username}`);
+    } else {
+      sendError(ws, "time/setCalendarSettings", "Не удалось обновить настройки");
+    }
   } catch (error) {
-    handleError(error as Error, "TimeHandlers.setCycleInterval");
-    sendSystemError(ws, "Ошибка при установке интервала цикла");
+    handleError(error as Error, "TimeHandlers.setCalendarSettings");
+    sendSystemError(ws, "Ошибка при установке настроек календаря");
+  }
+}
+
+/**
+ * Установка даты вручную (только для админов)
+ */
+async function handleSetDate(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const playerData = (ws as any).playerData;
+
+    if (!playerData || !playerData.id) {
+      sendError(ws, "time/setDate", "Требуется авторизация");
+      return;
+    }
+
+    const { year, month, day } = data;
+
+    if (!year || !month || !day) {
+      sendError(ws, "time/setDate", "Не указаны все параметры даты");
+      return;
+    }
+
+    const success = await setDate(year, month, day);
+
+    if (success) {
+      sendSuccess(ws, "time/setDate", {
+        message: "Дата установлена",
+        year,
+        month,
+        day,
+      });
+
+      log(`Дата установлена вручную пользователем ${playerData.username}: Год ${year}, Месяц ${month}, День ${day}`);
+    } else {
+      sendError(ws, "time/setDate", "Не удалось установить дату (возможно некорректные значения)");
+    }
+  } catch (error) {
+    handleError(error as Error, "TimeHandlers.setDate");
+    sendSystemError(ws, "Ошибка при установке даты");
   }
 }
 
@@ -82,43 +167,47 @@ async function handleCreateTestTask(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const { delay = 10, message = "Тестовая задача завершена" } = data;
+    const { delay, message } = data;
+
+    if (!delay || !message) {
+      sendError(ws, "time/createTestTask", "Не указаны параметры задачи");
+      return;
+    }
 
     if (delay < 1 || delay > 300) {
       sendError(ws, "time/createTestTask", "Задержка должна быть от 1 до 300 секунд");
       return;
     }
 
-    // Создаем отложенную задачу
-    const taskId = registerOnceEvent({
-      name: `testTask_${playerData.username}`,
-      executeAt: Date.now() + delay * 1000,
+    const { sendToUser } = require("../../network/socketHandler");
+
+    const eventId = registerOnceEvent({
+      name: "testTask",
+      delayInSeconds: delay,
       playerId: playerData.id,
       action: () => {
-        // Отправляем сообщение конкретному игроку
-        ws.send(
-          JSON.stringify({
-            action: "time/taskCompleted",
-            data: {
-              message,
-              completedAt: Date.now(),
-              playerId: playerData.id,
-            },
-          })
-        );
-
-        log(`Тестовая задача завершена для ${playerData.username}`);
+        sendToUser(playerData.id, {
+          action: "time/testTaskComplete",
+          data: { message },
+        });
+      },
+      persistent: true,
+      metadata: {
+        actionType: "testTask",
+        message,
       },
     });
 
     sendSuccess(ws, "time/createTestTask", {
-      taskId,
-      message: `Задача создана и выполнится через ${delay} секунд`,
-      executeAt: Date.now() + delay * 1000,
+      message: `Задача создана, выполнится через ${delay} секунд`,
+      eventId,
+      delay,
     });
+
+    log(`Создана тестовая задача для ${playerData.username} (${delay}с)`);
   } catch (error) {
     handleError(error as Error, "TimeHandlers.createTestTask");
-    sendSystemError(ws, "Ошибка при создании тестовой задачи");
+    sendSystemError(ws, "Ошибка при создании задачи");
   }
 }
 
@@ -134,22 +223,22 @@ async function handleCancelTask(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const { taskId } = data;
+    const { eventId } = data;
 
-    if (!taskId) {
+    if (!eventId) {
       sendError(ws, "time/cancelTask", "Не указан ID задачи");
       return;
     }
 
-    const cancelled = await cancelEvent(taskId);
+    const cancelled = unregisterEvent(eventId);
 
     if (cancelled) {
       sendSuccess(ws, "time/cancelTask", {
         message: "Задача отменена",
-        taskId,
+        eventId,
       });
     } else {
-      sendError(ws, "time/cancelTask", "Задача не найдена или уже выполнена");
+      sendError(ws, "time/cancelTask", "Не удалось отменить задачу");
     }
   } catch (error) {
     handleError(error as Error, "TimeHandlers.cancelTask");
@@ -176,7 +265,6 @@ async function handlePauseEvent(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const { pauseEvent } = require("../../game/engine/timeManager");
     const paused = await pauseEvent(eventId);
 
     if (paused) {
@@ -212,7 +300,6 @@ async function handleResumeEvent(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
-    const { resumeEvent } = require("../../game/engine/timeManager");
     const resumed = await resumeEvent(eventId);
 
     if (resumed) {
@@ -230,49 +317,6 @@ async function handleResumeEvent(ws: WebSocket, data: any): Promise<void> {
 }
 
 /**
- * Изменение времени выполнения события
- */
-async function handleUpdateEventTime(ws: WebSocket, data: any): Promise<void> {
-  try {
-    const playerData = (ws as any).playerData;
-
-    if (!playerData || !playerData.id) {
-      sendError(ws, "time/updateEventTime", "Требуется авторизация");
-      return;
-    }
-
-    const { eventId, newDelay } = data;
-
-    if (!eventId || !newDelay) {
-      sendError(ws, "time/updateEventTime", "Не указаны параметры");
-      return;
-    }
-
-    if (newDelay < 1 || newDelay > 86400) {
-      sendError(ws, "time/updateEventTime", "Задержка должна быть от 1 до 86400 секунд");
-      return;
-    }
-
-    const { updateEventTime } = require("../../game/engine/timeManager");
-    const newExecuteAt = Date.now() + newDelay * 1000;
-    const updated = await updateEventTime(eventId, newExecuteAt);
-
-    if (updated) {
-      sendSuccess(ws, "time/updateEventTime", {
-        message: "Время события обновлено",
-        eventId,
-        newExecuteAt,
-      });
-    } else {
-      sendError(ws, "time/updateEventTime", "Не удалось обновить время события");
-    }
-  } catch (error) {
-    handleError(error as Error, "TimeHandlers.updateEventTime");
-    sendSystemError(ws, "Ошибка при изменении времени события");
-  }
-}
-
-/**
  * Получение событий игрока
  */
 async function handleGetPlayerEvents(ws: WebSocket): Promise<void> {
@@ -284,7 +328,6 @@ async function handleGetPlayerEvents(ws: WebSocket): Promise<void> {
       return;
     }
 
-    const { getPlayerEvents } = require("../../game/engine/timeManager");
     const events = await getPlayerEvents(playerData.id);
 
     sendSuccess(ws, "time/getPlayerEvents", {
@@ -299,13 +342,17 @@ async function handleGetPlayerEvents(ws: WebSocket): Promise<void> {
 
 // Регистрация обработчиков
 export function registerTimeHandlers(): void {
-  registerHandler("time", "getCycle", handleGetCycle);
-  registerHandler("time", "setCycleInterval", handleSetCycleInterval);
+  // Игровой календарь
+  registerHandler("time", "getDate", handleGetDate);
+  registerHandler("time", "getCycleStats", handleGetCycleStats);
+  registerHandler("time", "setCalendarSettings", handleSetCalendarSettings);
+  registerHandler("time", "setDate", handleSetDate);
+
+  // TimeManager события
   registerHandler("time", "getStats", handleGetTimeStats);
   registerHandler("time", "createTestTask", handleCreateTestTask);
   registerHandler("time", "cancelTask", handleCancelTask);
   registerHandler("time", "pauseEvent", handlePauseEvent);
   registerHandler("time", "resumeEvent", handleResumeEvent);
-  registerHandler("time", "updateEventTime", handleUpdateEventTime);
   registerHandler("time", "getPlayerEvents", handleGetPlayerEvents);
 }

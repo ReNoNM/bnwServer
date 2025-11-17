@@ -1,4 +1,3 @@
-// src/db/migrations/init.ts
 import { db } from "../connection";
 import { sql } from "kysely";
 import { log, error as logError } from "../../utils/logger";
@@ -176,6 +175,48 @@ const tables: TableDefinition[] = [
       { name: "idx_spawn_points_offers_consumed", columns: "consumed" },
       { name: "idx_spawn_points_offers_created_at", columns: "created_at" },
     ],
+  },
+  {
+    name: "time_events",
+    columns: [
+      { name: "id", type: "VARCHAR(255)", constraints: "PRIMARY KEY" },
+      { name: "type", type: "VARCHAR(50)", constraints: "NOT NULL CHECK (type IN ('periodic', 'once', 'delayed'))" },
+      { name: "name", type: "VARCHAR(255)", constraints: "NOT NULL" },
+      { name: "player_id", type: "UUID", nullable: true, constraints: "REFERENCES players(id) ON DELETE CASCADE" },
+      { name: "world_id", type: "UUID", nullable: true, constraints: "REFERENCES worlds(id) ON DELETE CASCADE" },
+      { name: "execute_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
+      { name: "interval", type: "INTEGER", nullable: true }, // секунд для периодических событий
+      { name: "last_execution", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
+      {
+        name: "status",
+        type: "VARCHAR(50)",
+        constraints: "NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled'))",
+      },
+      { name: "paused_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
+      { name: "remaining_time", type: "BIGINT", nullable: true }, // миллисекунд до выполнения на момент паузы
+      { name: "metadata", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [
+      { name: "idx_time_events_status", columns: "status" },
+      { name: "idx_time_events_player", columns: "player_id" },
+      { name: "idx_time_events_world", columns: "world_id" },
+      { name: "idx_time_events_execute_at", columns: "execute_at" },
+      { name: "idx_time_events_type", columns: "type" },
+      { name: "idx_time_events_name", columns: "name" },
+    ],
+  },
+  {
+    name: "game_settings",
+    columns: [
+      { name: "id", type: "VARCHAR(50)", constraints: "PRIMARY KEY" },
+      { name: "calendar", type: "JSONB", constraints: "NOT NULL" },
+      { name: "date_state", type: "JSONB", constraints: "NOT NULL" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [],
   },
 ];
 

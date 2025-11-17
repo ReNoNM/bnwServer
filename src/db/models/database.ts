@@ -46,6 +46,14 @@ export interface ChatMessages {
   type: string;
 }
 
+export interface GameSettings {
+  calendar: Json;
+  created_at: Generated<Timestamp | null>;
+  date_state: Json;
+  id: string;
+  updated_at: Generated<Timestamp | null>;
+}
+
 export interface Map {
   building_id: string | null;
   id: Generated<string>;
@@ -92,6 +100,23 @@ export interface SpawnPointsOffers {
   world_id: string;
 }
 
+export interface TimeEvents {
+  created_at: Generated<Timestamp | null>;
+  execute_at: Timestamp | null;
+  id: string;
+  interval: number | null;
+  last_execution: Timestamp | null;
+  metadata: Generated<Json | null>;
+  name: string;
+  paused_at: Timestamp | null;
+  player_id: string | null;
+  remaining_time: Int8 | null;
+  status: string;
+  type: string;
+  updated_at: Generated<Timestamp | null>;
+  world_id: string | null;
+}
+
 export interface Tokens {
   device_info: Generated<Json | null>;
   expires_at: Int8;
@@ -118,10 +143,12 @@ export interface Worlds {
 export interface DB {
   buildings: Buildings;
   chat_messages: ChatMessages;
+  game_settings: GameSettings;
   map: Map;
   map_visibility: MapVisibility;
   players: Players;
   spawn_points_offers: SpawnPointsOffers;
+  time_events: TimeEvents;
   tokens: Tokens;
   worlds: Worlds;
 }

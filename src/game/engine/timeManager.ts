@@ -1,9 +1,9 @@
 import { log, error as logError } from "../../utils/logger";
 import { handleError } from "../../utils/errorHandler";
-import { broadcast } from "../../network/socketHandler";
 import * as timeEventRepository from "../../db/repositories/timeEventRepository";
 import { v4 as uuidv4 } from "uuid";
 import gameSettings from "../../config/gameSettings";
+import { sendToUser } from "../../network/socketHandler";
 
 // ВАЖНО: Функции для работы с временем с округлением до секунд
 /**
@@ -56,18 +56,11 @@ const events: Map<string, TimeEvent> = new Map();
 const periodicEvents: Map<string, PeriodicEvent> = new Map();
 const eventBuckets: Map<number, Set<string>> = new Map();
 
-// Интервал проверки (1 секунда)
+// Интервал проверки
 let tickInterval: NodeJS.Timeout | null = null;
-const TICK_INTERVAL = gameSettings.timeEvents.TICK_INTERVAL; // ms - ровно 1 секунда
+const TICK_INTERVAL = gameSettings.timeEvents.TICK_INTERVAL; // ms - 1 секунда
 const BUCKET_SIZE = gameSettings.timeEvents.BUCKET_SIZE; // 5 секунд на bucket
 const SAVE_INTERVAL = gameSettings.timeEvents.SAVE_INTERVAL; // сохранять состояние каждые 30 секунд
-
-// Состояние игрового цикла
-let gameCycle = {
-  current: 0,
-  lastUpdate: getNowRounded(),
-  ...gameSettings.gameCycle,
-};
 
 /**
  * Инициализация TimeManager с восстановлением событий
@@ -77,17 +70,6 @@ export async function initializeTimeManager(): Promise<void> {
 
   // Восстанавливаем события из БД
   await restoreEventsFromDB();
-
-  // Восстанавливаем игровой цикл
-  await restoreGameCycle();
-
-  // Регистрируем игровой цикл как первое периодическое событие
-  registerPeriodicEvent({
-    name: "gameCycle",
-    interval: gameCycle.interval,
-    action: handleGameCycle,
-    persistent: true,
-  });
 
   // Запускаем основной таймер
   startTicking();
@@ -127,7 +109,7 @@ async function restoreEventsFromDB(): Promise<void> {
             id: dbEvent.id,
             type: dbEvent.type,
             name: dbEvent.name,
-            executeAt: executeAt, // уже округлено
+            executeAt: executeAt,
             playerId: dbEvent.player_id || undefined,
             worldId: dbEvent.world_id || undefined,
             metadata: dbEvent.metadata,
@@ -199,47 +181,20 @@ async function executeRestoredEvent(dbEvent: any): Promise<void> {
     const metadata = dbEvent.metadata || {};
 
     switch (metadata.actionType) {
-      case "buildingComplete":
-        const { buildingRepository } = require("../../db/repositories");
-        await buildingRepository.update(metadata.buildingId, { status: "completed" });
-
-        const { sendToUser } = require("../../network/socketHandler");
+      case "testTask":
         sendToUser(dbEvent.player_id, {
-          action: "building/completed",
-          data: metadata,
+          action: "time/testTaskComplete",
+          data: {
+            message: metadata.message || "Тестовая задача завершена!",
+          },
         });
+        log(`Тестовая задача завершена для игрока ${dbEvent.player_id}`);
         break;
-
-      case "researchComplete":
-        // TODO: Реализовать когда будет система исследований
-        break;
-
-      case "troopsArrival":
-        // TODO: Реализовать когда будет боевая система
-        break;
-
       default:
-        log(`Неизвестный тип восстановленного события: ${metadata.actionType}`);
+        log(`Неизвестный тип восстановленного события: ${metadata.actionType}`, true);
     }
   } catch (err) {
     handleError(err as Error, `TimeManager.executeRestored.${dbEvent.name}`);
-  }
-}
-
-/**
- * Восстановление игрового цикла
- */
-async function restoreGameCycle(): Promise<void> {
-  try {
-    const savedCycle = await timeEventRepository.getById("gameCycle");
-    if (savedCycle && savedCycle.metadata) {
-      gameCycle.current = savedCycle.metadata.current || 0;
-      gameCycle.interval = savedCycle.metadata.interval || gameSettings.gameCycle.interval;
-      gameCycle.lastUpdate = getNowRounded();
-      log(`Игровой цикл восстановлен: ${gameCycle.current}`);
-    }
-  } catch (err) {
-    handleError(err as Error, "TimeManager.restoreGameCycle");
   }
 }
 
@@ -249,13 +204,7 @@ async function restoreGameCycle(): Promise<void> {
 function startPeriodicSave(): void {
   setInterval(async () => {
     try {
-      await timeEventRepository.updateStatus("gameCycle", "active", {
-        metadata: JSON.stringify({
-          current: gameCycle.current,
-          interval: gameCycle.interval,
-          lastUpdate: gameCycle.lastUpdate,
-        }) as any,
-      });
+      await saveAllEvents();
     } catch (err) {
       handleError(err as Error, "TimeManager.periodicSave");
     }
@@ -294,6 +243,8 @@ async function saveAllEvents(): Promise<void> {
         eventsToSave.push(event);
       }
     }
+
+    if (eventsToSave.length === 0) return;
 
     log(`Сохранение ${eventsToSave.length} событий в БД`);
 
@@ -457,7 +408,7 @@ export function registerPeriodicEvent(params: {
     interval: params.interval,
     action: params.action,
     metadata: params.metadata,
-    lastExecution: getNowRounded(), // округляем до секунд
+    lastExecution: getNowRounded(),
     persistent: params.persistent,
   };
 
@@ -484,25 +435,21 @@ export function registerPeriodicEvent(params: {
  */
 export function registerOnceEvent(params: {
   name: string;
-  delayInSeconds?: number; // задержка в секундах
-  executeAt?: number; // или точное время (будет округлено)
+  delayInSeconds?: number;
+  executeAt?: number;
   action: () => void | Promise<void>;
   playerId?: string;
   worldId?: string;
   metadata?: any;
   persistent?: boolean;
 }): string {
-  const eventId = params.persistent ? uuidv4() : `once_${params.name}_${Date.now()}_${Math.random()}`;
+  const eventId = params.persistent ? `${params.name}_${params.playerId || "global"}_${Date.now()}` : uuidv4();
 
-  // Вычисляем время выполнения с округлением
-  let executeAt: number;
-  if (params.delayInSeconds !== undefined) {
-    executeAt = calculateExecuteTime(params.delayInSeconds);
-  } else if (params.executeAt !== undefined) {
-    executeAt = roundToSeconds(params.executeAt);
-  } else {
-    throw new Error("Необходимо указать delayInSeconds или executeAt");
-  }
+  const executeAt = params.executeAt
+    ? roundToSeconds(params.executeAt)
+    : params.delayInSeconds
+    ? calculateExecuteTime(params.delayInSeconds)
+    : getNowRounded();
 
   const event: TimeEvent = {
     id: eventId,
@@ -519,7 +466,7 @@ export function registerOnceEvent(params: {
 
   events.set(eventId, event);
 
-  // Добавляем в bucket для быстрого поиска
+  // Добавляем в bucket
   const bucket = Math.floor(executeAt / BUCKET_SIZE);
   if (!eventBuckets.has(bucket)) {
     eventBuckets.set(bucket, new Set());
@@ -531,54 +478,52 @@ export function registerOnceEvent(params: {
       id: eventId,
       type: "once",
       name: params.name,
-      execute_at: new Date(executeAt),
       player_id: params.playerId,
       world_id: params.worldId,
+      execute_at: new Date(executeAt),
       status: "active",
-      metadata: {
-        ...params.metadata,
-        actionType: params.metadata?.actionType || "generic",
-      },
+      metadata: params.metadata,
     });
   }
 
-  const executeIn = Math.round((executeAt - getNowRounded()) / 1000);
-  log(`Зарегистрировано одноразовое событие: ${params.name} (через ${executeIn}с)`);
+  log(`Зарегистрировано одноразовое событие: ${params.name} (через ${params.delayInSeconds || 0}с)`);
 
   return eventId;
 }
 
 /**
- * Отмена события
+ * Удаление события
  */
-export async function cancelEvent(eventId: string): Promise<boolean> {
+export function unregisterEvent(eventId: string): boolean {
+  // Проверяем периодические события
   if (periodicEvents.has(eventId)) {
+    const event = periodicEvents.get(eventId);
     periodicEvents.delete(eventId);
-    await timeEventRepository.updateStatus(eventId, "cancelled");
-    log(`Отменено периодическое событие: ${eventId}`);
+
+    if (event?.persistent) {
+      timeEventRepository.updateStatus(eventId, "cancelled");
+    }
+
+    log(`Удалено периодическое событие: ${eventId}`);
     return true;
   }
 
-  const event = events.get(eventId);
-  if (event) {
+  // Проверяем одноразовые события
+  if (events.has(eventId)) {
+    const event = events.get(eventId);
     events.delete(eventId);
 
-    if (event.executeAt) {
+    // Удаляем из bucket
+    if (event?.executeAt) {
       const bucket = Math.floor(event.executeAt / BUCKET_SIZE);
-      const bucketEvents = eventBuckets.get(bucket);
-      if (bucketEvents) {
-        bucketEvents.delete(eventId);
-        if (bucketEvents.size === 0) {
-          eventBuckets.delete(bucket);
-        }
-      }
+      eventBuckets.get(bucket)?.delete(eventId);
     }
 
-    if (event.persistent) {
-      await timeEventRepository.updateStatus(eventId, "cancelled");
+    if (event?.persistent) {
+      timeEventRepository.updateStatus(eventId, "cancelled");
     }
 
-    log(`Отменено событие: ${eventId}`);
+    log(`Удалено одноразовое событие: ${eventId}`);
     return true;
   }
 
@@ -590,36 +535,21 @@ export async function cancelEvent(eventId: string): Promise<boolean> {
  */
 export async function pauseEvent(eventId: string): Promise<boolean> {
   const event = events.get(eventId);
-
-  if (!event || event.status === "paused" || !event.executeAt) {
-    return false;
-  }
-
-  const nowRounded = getNowRounded();
-  const remainingTime = event.executeAt - nowRounded;
-
-  if (remainingTime <= 0) {
-    return false; // Событие уже должно было выполниться
-  }
+  if (!event || event.type !== "once") return false;
 
   event.status = "paused";
 
-  // Удаляем из bucket чтобы не выполнялось
-  const bucket = Math.floor(event.executeAt / BUCKET_SIZE);
-  const bucketEvents = eventBuckets.get(bucket);
-  if (bucketEvents) {
-    bucketEvents.delete(eventId);
-    if (bucketEvents.size === 0) {
-      eventBuckets.delete(bucket);
-    }
-  }
-
   if (event.persistent) {
-    await timeEventRepository.pauseEvent(eventId);
+    const nowRounded = getNowRounded();
+    const remaining = event.executeAt ? event.executeAt - nowRounded : 0;
+
+    await timeEventRepository.updateStatus(eventId, "paused", {
+      paused_at: new Date(nowRounded),
+      remaining_time: remaining,
+    });
   }
 
-  log(`Событие приостановлено: ${eventId} (осталось ${remainingTime / 1000}с)`);
-
+  log(`Событие приостановлено: ${eventId}`);
   return true;
 }
 
@@ -628,125 +558,39 @@ export async function pauseEvent(eventId: string): Promise<boolean> {
  */
 export async function resumeEvent(eventId: string): Promise<boolean> {
   const event = events.get(eventId);
+  if (!event || event.status !== "paused" || event.type !== "once") return false;
 
-  if (!event || event.status !== "paused") {
-    return false;
-  }
+  const nowRounded = getNowRounded();
 
-  let newExecuteAt: number;
-
+  // Восстанавливаем время выполнения из БД
   if (event.persistent) {
     const dbEvent = await timeEventRepository.getById(eventId);
-    if (!dbEvent || !dbEvent.remaining_time) {
-      return false;
+    if (dbEvent && dbEvent.remaining_time) {
+      event.executeAt = nowRounded + dbEvent.remaining_time;
     }
-    // Вычисляем новое время с округлением
-    const remainingSeconds = Math.ceil(Number(dbEvent.remaining_time) / 1000);
-    newExecuteAt = calculateExecuteTime(remainingSeconds);
-
-    await timeEventRepository.resumeEvent(eventId);
-  } else {
-    newExecuteAt = event.executeAt || getNowRounded();
   }
 
   event.status = "active";
-  event.executeAt = newExecuteAt;
 
-  // Добавляем обратно в bucket
-  const bucket = Math.floor(newExecuteAt / BUCKET_SIZE);
-  if (!eventBuckets.has(bucket)) {
-    eventBuckets.set(bucket, new Set());
-  }
-  eventBuckets.get(bucket)!.add(eventId);
-
-  log(`Событие возобновлено: ${eventId}`);
-
-  return true;
-}
-
-/**
- * Изменить время выполнения события
- */
-export async function updateEventTime(eventId: string, delayInSeconds: number): Promise<boolean> {
-  const event = events.get(eventId);
-
-  if (!event || event.status !== "active" || !event.executeAt) {
-    return false;
-  }
-
-  const oldBucket = Math.floor(event.executeAt / BUCKET_SIZE);
-  const newExecuteAt = calculateExecuteTime(delayInSeconds);
-  const newBucket = Math.floor(newExecuteAt / BUCKET_SIZE);
-
-  // Удаляем из старого bucket
-  const oldBucketEvents = eventBuckets.get(oldBucket);
-  if (oldBucketEvents) {
-    oldBucketEvents.delete(eventId);
-    if (oldBucketEvents.size === 0) {
-      eventBuckets.delete(oldBucket);
+  // Обновляем bucket
+  if (event.executeAt) {
+    const bucket = Math.floor(event.executeAt / BUCKET_SIZE);
+    if (!eventBuckets.has(bucket)) {
+      eventBuckets.set(bucket, new Set());
     }
+    eventBuckets.get(bucket)!.add(eventId);
   }
-
-  // Обновляем время
-  event.executeAt = newExecuteAt;
-
-  // Добавляем в новый bucket
-  if (!eventBuckets.has(newBucket)) {
-    eventBuckets.set(newBucket, new Set());
-  }
-  eventBuckets.get(newBucket)!.add(eventId);
 
   if (event.persistent) {
-    await timeEventRepository.updateExecuteTime(eventId, new Date(newExecuteAt));
+    await timeEventRepository.updateStatus(eventId, "active", {
+      execute_at: event.executeAt ? new Date(event.executeAt) : undefined,
+      paused_at: null,
+      remaining_time: null,
+    });
   }
 
-  log(`Время события изменено: ${eventId} (выполнится через ${delayInSeconds}с)`);
-
+  log(`Событие возобновлено: ${eventId}`);
   return true;
-}
-
-/**
- * Обработчик игрового цикла
- */
-function handleGameCycle(): void {
-  gameCycle.current++;
-  gameCycle.lastUpdate = getNowRounded();
-
-  // Отправляем обновление всем подключенным клиентам
-  broadcast({
-    action: "game/cycleUpdate",
-    data: {
-      cycle: gameCycle.current,
-      timestamp: gameCycle.lastUpdate,
-      nextCycleIn: gameCycle.interval,
-    },
-  });
-
-  log(`Игровой цикл обновлен: ${gameCycle.current}`);
-}
-
-/**
- * Получить текущий игровой цикл
- */
-export function getCurrentCycle(): number {
-  return gameCycle.current;
-}
-
-/**
- * Установить интервал игрового цикла
- */
-export function setGameCycleInterval(seconds: number): void {
-  gameCycle.interval = seconds;
-
-  // Обновляем периодическое событие
-  for (const [id, event] of periodicEvents) {
-    if (event.name === "gameCycle") {
-      event.interval = seconds;
-      break;
-    }
-  }
-
-  log(`Интервал игрового цикла изменен на ${seconds} секунд`);
 }
 
 /**
@@ -760,11 +604,6 @@ export function getTimeManagerStats(): any {
     onceEvents: events.size,
     pausedEvents: pausedCount,
     buckets: eventBuckets.size,
-    gameCycle: {
-      current: gameCycle.current,
-      interval: gameCycle.interval,
-      lastUpdate: new Date(gameCycle.lastUpdate).toISOString(),
-    },
   };
 }
 

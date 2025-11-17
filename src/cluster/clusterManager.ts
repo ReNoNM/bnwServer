@@ -4,6 +4,7 @@ import { startServer } from "../network/websocketServer";
 import { log, error as logError } from "../utils/logger";
 import { initializeDatabase } from "../db";
 import { initializeTimeManager, stopTimeManager } from "../game/engine/timeManager";
+import { initializeGameCycle, stopGameCycle } from "../game/engine/gameCycleManager";
 
 // Определяем оптимальное количество рабочих процессов
 const determineWorkerCount = (): number => {
@@ -94,17 +95,21 @@ export function startCluster(): void {
     try {
       // Инициализируем базу данных перед запуском сервера
       initializeDatabase()
-        .then(() => {
-          // Инициализируем TimeManager
-          initializeTimeManager();
+        .then(async () => {
+          // 1. Инициализируем TimeManager (чистая библиотека)
+          await initializeTimeManager();
           log("TimeManager инициализирован");
 
-          // После успешной инициализации запускаем сервер
+          // 2. Инициализируем игровой цикл (игровая механика)
+          await initializeGameCycle();
+          log("GameCycle инициализирован");
+
+          // 3. После успешной инициализации запускаем сервер
           startServer();
           log(`Рабочий процесс ${process.pid} запущен`);
         })
         .catch((err) => {
-          logError(`Ошибка инициализации базы данных: ${err.message}`);
+          logError(`Ошибка инициализации: ${err.message}`);
           process.exit(1);
         });
 
@@ -129,14 +134,18 @@ export function startCluster(): void {
         }
       });
 
-      // Корректная остановка TimeManager при завершении процесса
-      process.on("SIGTERM", () => {
-        stopTimeManager();
+      // Корректная остановка при завершении процесса
+      process.on("SIGTERM", async () => {
+        log("Worker: Получен SIGTERM, остановка...");
+        await stopGameCycle();
+        await stopTimeManager();
         process.exit(0);
       });
 
-      process.on("SIGINT", () => {
-        stopTimeManager();
+      process.on("SIGINT", async () => {
+        log("Worker: Получен SIGINT, остановка...");
+        await stopGameCycle();
+        await stopTimeManager();
         process.exit(0);
       });
     } catch (error) {

@@ -8,8 +8,8 @@ export interface TimeEvent {
   interval?: number;
   last_execution?: Date;
   status: "active" | "paused" | "completed" | "cancelled";
-  paused_at?: Date;
-  remaining_time?: number; // миллисекунд до выполнения на момент паузы
+  paused_at?: Date | null;
+  remaining_time?: number | null; // миллисекунд до выполнения на момент паузы
   metadata?: any;
   created_at: Date;
   updated_at: Date;
