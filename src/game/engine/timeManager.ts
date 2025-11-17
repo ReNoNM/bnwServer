@@ -395,6 +395,8 @@ async function processPlayerEvents(playerId: string, events: TimeEvent[]): Promi
 export function registerPeriodicEvent(params: {
   name: string;
   interval: number; // в секундах
+  playerId?: string;
+  worldId?: string;
   action: () => void | Promise<void>;
   metadata?: any;
   persistent?: boolean;
@@ -406,6 +408,8 @@ export function registerPeriodicEvent(params: {
     type: "periodic",
     name: params.name,
     interval: params.interval,
+    playerId: params.playerId,
+    worldId: params.worldId,
     action: params.action,
     metadata: params.metadata,
     lastExecution: getNowRounded(),
@@ -419,6 +423,8 @@ export function registerPeriodicEvent(params: {
       id: eventId,
       type: "periodic",
       name: params.name,
+      player_id: params.playerId,
+      world_id: params.worldId,
       interval: params.interval,
       status: "active",
       metadata: params.metadata,
