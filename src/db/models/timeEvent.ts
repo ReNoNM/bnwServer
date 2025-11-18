@@ -1,15 +1,16 @@
 export interface TimeEvent {
   id: string;
-  type: "periodic" | "once" | "delayed";
+  type: "periodic" | "once" | "delayed" | "cron"; // Добавлен тип cron
   name: string;
   player_id?: string;
   world_id?: string;
   execute_at?: Date;
+  start_at?: Date; // Время начала отсчета для cron событий
   interval?: number;
   last_execution?: Date;
   status: "active" | "paused" | "completed" | "cancelled";
   paused_at?: Date | null;
-  remaining_time?: number | null; // миллисекунд до выполнения на момент паузы
+  remaining_time?: number | null;
   metadata?: any;
   created_at: Date;
   updated_at: Date;

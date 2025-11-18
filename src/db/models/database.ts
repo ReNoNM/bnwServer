@@ -111,6 +111,7 @@ export interface TimeEvents {
   paused_at: Timestamp | null;
   player_id: string | null;
   remaining_time: Int8 | null;
+  start_at: Timestamp | null;
   status: string;
   type: string;
   updated_at: Generated<Timestamp | null>;

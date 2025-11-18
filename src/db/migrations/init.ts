@@ -180,11 +180,12 @@ const tables: TableDefinition[] = [
     name: "time_events",
     columns: [
       { name: "id", type: "VARCHAR(255)", constraints: "PRIMARY KEY" },
-      { name: "type", type: "VARCHAR(50)", constraints: "NOT NULL CHECK (type IN ('periodic', 'once', 'delayed'))" },
+      { name: "type", type: "VARCHAR(50)", constraints: "NOT NULL CHECK (type IN ('periodic', 'once', 'delayed', 'cron'))" },
       { name: "name", type: "VARCHAR(255)", constraints: "NOT NULL" },
       { name: "player_id", type: "UUID", nullable: true, constraints: "REFERENCES players(id) ON DELETE CASCADE" },
       { name: "world_id", type: "UUID", nullable: true, constraints: "REFERENCES worlds(id) ON DELETE CASCADE" },
       { name: "execute_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
+      { name: "start_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
       { name: "interval", type: "INTEGER", nullable: true }, // секунд для периодических событий
       { name: "last_execution", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
       {
@@ -235,7 +236,7 @@ export async function initDatabase(): Promise<void> {
           )
         `.execute(trx);
 
-        const tableExists = tableExistsResult.rows[0]?.exists === true;
+        const tableExists = (tableExistsResult.rows[0] as any)?.exists === true;
 
         if (!tableExists) {
           // Создаем таблицу, если она не существует

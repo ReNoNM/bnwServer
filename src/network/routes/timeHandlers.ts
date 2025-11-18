@@ -3,7 +3,15 @@ import { registerHandler } from "../messageDispatcher";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
 import { handleError } from "../../utils/errorHandler";
 import { log } from "../../utils/logger";
-import { getTimeManagerStats, registerOnceEvent, getPlayerEvents, pauseEvent, resumeEvent, unregisterEvent } from "../../game/engine/timeManager";
+import {
+  getTimeManagerStats,
+  registerOnceEvent,
+  registerCronEvent,
+  getPlayerEvents,
+  pauseEvent,
+  resumeEvent,
+  unregisterEvent,
+} from "../../game/engine/timeManager";
 import { getCurrentDate, getCalendarSettings, updateCalendarSettings, setDate, getGameCycleStats } from "../../game/engine/gameCycleManager";
 
 /**
@@ -181,15 +189,35 @@ async function handleCreateTestTask(ws: WebSocket, data: any): Promise<void> {
 
     const { sendToUser } = require("../../network/socketHandler");
 
-    const eventId = registerOnceEvent({
-      name: "testTask",
-      delayInSeconds: delay,
+    // const eventId = registerOnceEvent({
+    //   name: "testTask",
+    //   delayInSeconds: delay,
+    //   playerId: playerData.id,
+    //   action: () => {
+    //     sendToUser(playerData.id, {
+    //       action: "time/testTaskComplete",
+    //       data: { message },
+    //     });
+    //   },
+    //   persistent: true,
+    //   metadata: {
+    //     actionType: "testTask",
+    //     message,
+    //   },
+    // });
+    const startAt = new Date();
+    startAt.setMinutes(startAt.getMinutes() + 1);
+    const eventId = registerCronEvent({
+      name: "testCronTask",
+      startAt: startAt,
+      interval: 5, // секунды
       playerId: playerData.id,
       action: () => {
         sendToUser(playerData.id, {
-          action: "time/testTaskComplete",
-          data: { message },
+          action: "time/testCronTaskComplete",
+          data: { message, timestamp: new Date() },
         });
+        log(`Cron задача сработала для ${playerData.username}`);
       },
       persistent: true,
       metadata: {
@@ -208,6 +236,64 @@ async function handleCreateTestTask(ws: WebSocket, data: any): Promise<void> {
   } catch (error) {
     handleError(error as Error, "TimeHandlers.createTestTask");
     sendSystemError(ws, "Ошибка при создании задачи");
+  }
+}
+
+/**
+ * Создание тестовой Cron задачи
+ */
+async function handleCreateCronTask(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const playerData = (ws as any).playerData;
+
+    if (!playerData || !playerData.id) {
+      sendError(ws, "time/createCronTask", "Требуется авторизация");
+      return;
+    }
+
+    const { interval, startAt, message } = data;
+
+    if (!interval || !startAt || !message) {
+      sendError(ws, "time/createCronTask", "Не указаны параметры (interval, startAt, message)");
+      return;
+    }
+
+    const { sendToUser } = require("../../network/socketHandler");
+    const startDate = new Date(startAt);
+
+    if (isNaN(startDate.getTime())) {
+      sendError(ws, "time/createCronTask", "Некорректная дата startAt");
+      return;
+    }
+
+    const eventId = registerCronEvent({
+      name: "testCronTask",
+      startAt: startDate,
+      interval: interval, // секунды
+      playerId: playerData.id,
+      action: () => {
+        sendToUser(playerData.id, {
+          action: "time/testCronTaskComplete",
+          data: { message, timestamp: new Date() },
+        });
+        log(`Cron задача сработала для ${playerData.username}`);
+      },
+      persistent: true,
+      metadata: {
+        actionType: "testTask",
+        message,
+      },
+    });
+
+    sendSuccess(ws, "time/createCronTask", {
+      message: `Cron задача создана. Старт: ${startDate.toISOString()}, Интервал: ${interval}с`,
+      eventId,
+    });
+
+    log(`Создана Cron задача для ${playerData.username}`);
+  } catch (error) {
+    handleError(error as Error, "TimeHandlers.createCronTask");
+    sendSystemError(ws, "Ошибка при создании Cron задачи");
   }
 }
 
@@ -351,6 +437,7 @@ export function registerTimeHandlers(): void {
   // TimeManager события
   registerHandler("time", "getStats", handleGetTimeStats);
   registerHandler("time", "createTestTask", handleCreateTestTask);
+  registerHandler("time", "createCronTask", handleCreateCronTask); // Новый обработчик
   registerHandler("time", "cancelTask", handleCancelTask);
   registerHandler("time", "pauseEvent", handlePauseEvent);
   registerHandler("time", "resumeEvent", handleResumeEvent);

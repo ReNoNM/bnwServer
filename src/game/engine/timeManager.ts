@@ -28,15 +28,39 @@ function calculateExecuteTime(delayInSeconds: number): number {
   return now + delayInSeconds * 1000;
 }
 
+/**
+ * Вычисляет следующее время выполнения для Cron события.
+ * Если расчетное время в прошлом (сервер лежал), возвращает ближайшее будущее время согласно сетке интервалов.
+ */
+function calculateNextCronTime(startAt: number, intervalSeconds: number, fromTime: number): number {
+  const intervalMs = intervalSeconds * 1000;
+  let nextRun = startAt;
+
+  // Если время старта еще не наступило, просто возвращаем его
+  if (nextRun > fromTime) {
+    return nextRun;
+  }
+
+  // Если время старта в прошлом, прыгаем вперед интервалами
+  // Формула: fromTime + (interval - (fromTime - startAt) % interval)
+  // Но нужно быть аккуратным, чтобы не попасть ровно в fromTime, если мы хотим строго следующее
+  const diff = fromTime - startAt;
+  const intervalsPassed = Math.floor(diff / intervalMs) + 1; // +1 чтобы гарантированно попасть в будущее
+  nextRun = startAt + intervalsPassed * intervalMs;
+
+  return nextRun;
+}
+
 // Типы событий
-export type TimeEventType = "periodic" | "once" | "delayed";
+export type TimeEventType = "periodic" | "once" | "delayed" | "cron";
 
 export interface TimeEvent {
   id: string;
   type: TimeEventType;
   name: string;
-  executeAt?: number; // timestamp для одноразовых (всегда округлен до секунд)
-  interval?: number; // секунд для периодических
+  executeAt?: number; // timestamp для одноразовых и cron (следующее выполнение)
+  startAt?: number; // timestamp начала для cron
+  interval?: number; // секунд для периодических и cron
   lastExecution?: number; // всегда округлен до секунд
   action: () => void | Promise<void>;
   metadata?: any;
@@ -93,13 +117,46 @@ async function restoreEventsFromDB(): Promise<void> {
 
     // Восстанавливаем активные события
     for (const dbEvent of activeEvents) {
-      if (dbEvent.type === "once" && dbEvent.execute_at) {
-        // Округляем время из БД до секунд
+      if (dbEvent.type === "cron" && dbEvent.start_at && dbEvent.interval) {
+        // Восстановление CRON события
+        const startAt = roundToSeconds(new Date(dbEvent.start_at).getTime());
+        // Вычисляем СЛЕДУЮЩЕЕ выполнение относительно текущего времени, пропуская старые
+        const nextExecuteAt = calculateNextCronTime(startAt, dbEvent.interval, nowRounded);
+
+        const event: TimeEvent = {
+          id: dbEvent.id,
+          type: "cron",
+          name: dbEvent.name,
+          startAt: startAt,
+          interval: dbEvent.interval,
+          executeAt: nextExecuteAt,
+          playerId: dbEvent.player_id || undefined,
+          worldId: dbEvent.world_id || undefined,
+          metadata: dbEvent.metadata,
+          status: "active",
+          persistent: true,
+          action: () => executeRestoredEvent(dbEvent),
+        };
+
+        // Добавляем в память
+        events.set(event.id, event);
+
+        // Добавляем в bucket
+        addToBucket(nextExecuteAt, event.id);
+
+        // Если расчетное время изменилось относительно БД (из-за пропуска), обновим БД при сохранении или сразу
+        if (dbEvent.execute_at && new Date(dbEvent.execute_at).getTime() !== nextExecuteAt) {
+          await timeEventRepository.updateExecuteTime(dbEvent.id, new Date(nextExecuteAt));
+          log(`Cron событие ${dbEvent.name} перепланировано на ${new Date(nextExecuteAt).toISOString()} (пропуск старых)`);
+        }
+
+        restoredCount++;
+      } else if (dbEvent.type === "once" && dbEvent.execute_at) {
+        // Восстановление ONCE
         const executeAt = roundToSeconds(new Date(dbEvent.execute_at).getTime());
 
-        // Проверяем, не пропустили ли мы событие
         if (executeAt <= nowRounded) {
-          // Событие должно было выполниться пока сервер был выключен
+          // Событие уже должно было выполниться пока сервер лежал -> выполняем
           log(`Выполняем пропущенное событие: ${dbEvent.name}`);
           await executeRestoredEvent(dbEvent);
           await timeEventRepository.updateStatus(dbEvent.id, "completed");
@@ -107,7 +164,7 @@ async function restoreEventsFromDB(): Promise<void> {
           // Восстанавливаем событие
           const event: TimeEvent = {
             id: dbEvent.id,
-            type: dbEvent.type,
+            type: "once",
             name: dbEvent.name,
             executeAt: executeAt,
             playerId: dbEvent.player_id || undefined,
@@ -119,18 +176,11 @@ async function restoreEventsFromDB(): Promise<void> {
           };
 
           events.set(event.id, event);
-
-          // Добавляем в bucket
-          const bucket = Math.floor(executeAt / BUCKET_SIZE);
-          if (!eventBuckets.has(bucket)) {
-            eventBuckets.set(bucket, new Set());
-          }
-          eventBuckets.get(bucket)!.add(event.id);
-
+          addToBucket(executeAt, event.id);
           restoredCount++;
         }
       } else if (dbEvent.type === "periodic") {
-        // Восстанавливаем периодическое событие
+        // Восстановление PERIODIC
         const event: PeriodicEvent = {
           id: dbEvent.id,
           type: "periodic",
@@ -151,9 +201,11 @@ async function restoreEventsFromDB(): Promise<void> {
     for (const dbEvent of pausedEvents) {
       const event: TimeEvent = {
         id: dbEvent.id,
-        type: dbEvent.type,
+        type: dbEvent.type as TimeEventType,
         name: dbEvent.name,
         executeAt: dbEvent.execute_at ? roundToSeconds(new Date(dbEvent.execute_at).getTime()) : undefined,
+        startAt: dbEvent.start_at ? roundToSeconds(new Date(dbEvent.start_at).getTime()) : undefined,
+        interval: dbEvent.interval,
         playerId: dbEvent.player_id || undefined,
         worldId: dbEvent.world_id || undefined,
         metadata: dbEvent.metadata,
@@ -171,6 +223,17 @@ async function restoreEventsFromDB(): Promise<void> {
   } catch (err) {
     handleError(err as Error, "TimeManager.restoreEvents");
   }
+}
+
+/**
+ * Хелпер для добавления в bucket
+ */
+function addToBucket(timestamp: number, eventId: string) {
+  const bucket = Math.floor(timestamp / BUCKET_SIZE);
+  if (!eventBuckets.has(bucket)) {
+    eventBuckets.set(bucket, new Set());
+  }
+  eventBuckets.get(bucket)!.add(eventId);
 }
 
 /**
@@ -232,6 +295,8 @@ async function saveAllEvents(): Promise<void> {
   try {
     const eventsToSave = [];
 
+    // Сохраняем только те, которые active.
+    // Приостановленные и так сохранены в момент паузы.
     for (const [id, event] of events) {
       if (event.persistent && event.status === "active") {
         eventsToSave.push(event);
@@ -252,6 +317,8 @@ async function saveAllEvents(): Promise<void> {
       await timeEventRepository.updateStatus(event.id, event.status || "active", {
         execute_at: event.executeAt ? new Date(event.executeAt) : undefined,
         last_execution: event.lastExecution ? new Date(event.lastExecution) : undefined,
+        start_at: event.startAt ? new Date(event.startAt) : undefined,
+        interval: event.interval,
         metadata: JSON.stringify(event.metadata || {}) as any,
       });
     }
@@ -262,20 +329,15 @@ async function saveAllEvents(): Promise<void> {
 
 /**
  * Запуск основного цикла проверки
- * ВАЖНО: Синхронизируем с системным временем для точности
  */
 function startTicking(): void {
   if (tickInterval) return;
 
-  // Синхронизируемся с началом следующей секунды
   const now = Date.now();
   const msUntilNextSecond = 1000 - (now % 1000);
 
   setTimeout(() => {
-    // Запускаем tick сразу
     tick();
-
-    // И затем каждую секунду
     tickInterval = setInterval(() => {
       tick();
     }, TICK_INTERVAL);
@@ -291,20 +353,17 @@ async function tick(): Promise<void> {
   const nowRounded = getNowRounded();
 
   try {
-    // Обработка периодических событий
+    // 1. Обработка периодических событий (простой интервал от последнего исполнения)
     for (const [id, event] of periodicEvents) {
       const lastExec = event.lastExecution || 0;
       const secondsSinceLastExec = (nowRounded - lastExec) / 1000;
 
       if (secondsSinceLastExec >= event.interval) {
         event.lastExecution = nowRounded;
-
         try {
           const result = event.action();
           if (result instanceof Promise) {
-            result.catch((err) => {
-              handleError(err as Error, `TimeManager.periodic.${event.name}`);
-            });
+            result.catch((err) => handleError(err as Error, `TimeManager.periodic.${event.name}`));
           }
         } catch (err) {
           handleError(err as Error, `TimeManager.periodic.${event.name}`);
@@ -312,7 +371,7 @@ async function tick(): Promise<void> {
       }
     }
 
-    // Обработка одноразовых событий через buckets
+    // 2. Обработка событий из Bucket (Once и Cron)
     const currentBucket = Math.floor(nowRounded / BUCKET_SIZE);
     const eventIds = eventBuckets.get(currentBucket);
 
@@ -322,10 +381,12 @@ async function tick(): Promise<void> {
 
       for (const eventId of eventIds) {
         const event = events.get(eventId);
+        // Если событие удалено или на паузе - пропускаем
         if (!event || !event.executeAt || event.status === "paused") continue;
 
-        // Проверяем с точностью до секунды
+        // Проверяем время выполнения
         if (nowRounded >= event.executeAt) {
+          // Добавляем в списки на выполнение
           if (event.playerId) {
             if (!playerEvents.has(event.playerId)) {
               playerEvents.set(event.playerId, []);
@@ -335,11 +396,31 @@ async function tick(): Promise<void> {
             globalEvents.push(event);
           }
 
-          if (event.persistent) {
-            await timeEventRepository.updateStatus(event.id, "completed");
+          // ЛОГИКА ОБНОВЛЕНИЯ: CRON vs ONCE
+          if (event.type === "cron" && event.interval) {
+            // CRON: Планируем следующее выполнение
+            // Следующее время = Текущее время выполнения + Интервал
+            // ВАЖНО: Используем executeAt (плановое), а не nowRounded (фактическое), чтобы не накапливать сдвиг
+            const nextTime = event.executeAt + event.interval * 1000;
+            event.executeAt = nextTime;
+
+            // Переносим в новый bucket
+            addToBucket(nextTime, eventId);
+
+            // Обновляем БД (для persistent)
+            if (event.persistent) {
+              // Асинхронно, чтобы не блокировать тик
+              timeEventRepository.updateExecuteTime(eventId, new Date(nextTime)).catch((e) => logError(`Ошибка обновления cron времени: ${e}`));
+            }
+          } else {
+            // ONCE: Помечаем как выполненное и удаляем
+            if (event.persistent) {
+              timeEventRepository.updateStatus(event.id, "completed");
+            }
+            events.delete(eventId);
           }
 
-          events.delete(eventId);
+          // Удаляем из ТЕКУЩЕГО бакета (для cron он уже добавлен в будущий бакет, но из этого его надо убрать)
           eventIds.delete(eventId);
         }
       }
@@ -349,12 +430,10 @@ async function tick(): Promise<void> {
         try {
           const result = event.action();
           if (result instanceof Promise) {
-            result.catch((err) => {
-              handleError(err as Error, `TimeManager.once.${event.name}`);
-            });
+            result.catch((err) => handleError(err as Error, `TimeManager.${event.type}.${event.name}`));
           }
         } catch (err) {
-          handleError(err as Error, `TimeManager.once.${event.name}`);
+          handleError(err as Error, `TimeManager.${event.type}.${event.name}`);
         }
       }
 
@@ -390,7 +469,7 @@ async function processPlayerEvents(playerId: string, events: TimeEvent[]): Promi
 }
 
 /**
- * Регистрация периодического события
+ * Регистрация периодического события (простая проверка каждый тик)
  */
 export function registerPeriodicEvent(params: {
   name: string;
@@ -437,6 +516,70 @@ export function registerPeriodicEvent(params: {
 }
 
 /**
+ * Регистрация Cron события (фиксированный старт + интервал)
+ */
+export function registerCronEvent(params: {
+  name: string;
+  startAt: Date;
+  interval: number; // в секундах
+  action: () => void | Promise<void>;
+  playerId?: string;
+  worldId?: string;
+  metadata?: any;
+  persistent?: boolean;
+}): string {
+  const eventId = params.persistent ? `${params.name}_cron_${params.playerId || "global"}` : uuidv4();
+  const startAtSeconds = roundToSeconds(params.startAt.getTime());
+  const now = getNowRounded();
+
+  // Вычисляем ПЕРВОЕ выполнение
+  // Если startAt в будущем - это и есть первое выполнение
+  // Если startAt в прошлом - вычисляем следующее по сетке
+  const executeAt = calculateNextCronTime(startAtSeconds, params.interval, now);
+
+  const event: TimeEvent = {
+    id: eventId,
+    type: "cron",
+    name: params.name,
+    startAt: startAtSeconds,
+    interval: params.interval,
+    executeAt: executeAt,
+    action: params.action,
+    playerId: params.playerId,
+    worldId: params.worldId,
+    metadata: params.metadata,
+    status: "active",
+    persistent: params.persistent,
+  };
+
+  events.set(eventId, event);
+  addToBucket(executeAt, eventId);
+
+  if (params.persistent) {
+    timeEventRepository.create({
+      id: eventId,
+      type: "cron",
+      name: params.name,
+      player_id: params.playerId,
+      world_id: params.worldId,
+      execute_at: new Date(executeAt),
+      start_at: new Date(startAtSeconds),
+      interval: params.interval,
+      status: "active",
+      metadata: params.metadata,
+    });
+  }
+
+  log(
+    `Зарегистрировано Cron событие: ${params.name}. Старт: ${params.startAt.toISOString()}, Интервал: ${
+      params.interval
+    }с. Следующий запуск: ${new Date(executeAt).toISOString()}`
+  );
+
+  return eventId;
+}
+
+/**
  * Регистрация одноразового события
  */
 export function registerOnceEvent(params: {
@@ -471,13 +614,7 @@ export function registerOnceEvent(params: {
   };
 
   events.set(eventId, event);
-
-  // Добавляем в bucket
-  const bucket = Math.floor(executeAt / BUCKET_SIZE);
-  if (!eventBuckets.has(bucket)) {
-    eventBuckets.set(bucket, new Set());
-  }
-  eventBuckets.get(bucket)!.add(eventId);
+  addToBucket(executeAt, eventId);
 
   if (params.persistent) {
     timeEventRepository.create({
@@ -514,7 +651,7 @@ export function unregisterEvent(eventId: string): boolean {
     return true;
   }
 
-  // Проверяем одноразовые события
+  // Проверяем Bucket события (Once и Cron)
   if (events.has(eventId)) {
     const event = events.get(eventId);
     events.delete(eventId);
@@ -529,7 +666,7 @@ export function unregisterEvent(eventId: string): boolean {
       timeEventRepository.updateStatus(eventId, "cancelled");
     }
 
-    log(`Удалено одноразовое событие: ${eventId}`);
+    log(`Удалено событие (Once/Cron): ${eventId}`);
     return true;
   }
 
@@ -541,7 +678,7 @@ export function unregisterEvent(eventId: string): boolean {
  */
 export async function pauseEvent(eventId: string): Promise<boolean> {
   const event = events.get(eventId);
-  if (!event || event.type !== "once") return false;
+  if (!event || (event.type !== "once" && event.type !== "cron")) return false;
 
   event.status = "paused";
 
@@ -564,15 +701,25 @@ export async function pauseEvent(eventId: string): Promise<boolean> {
  */
 export async function resumeEvent(eventId: string): Promise<boolean> {
   const event = events.get(eventId);
-  if (!event || event.status !== "paused" || event.type !== "once") return false;
+  if (!event || event.status !== "paused" || (event.type !== "once" && event.type !== "cron")) return false;
 
   const nowRounded = getNowRounded();
 
-  // Восстанавливаем время выполнения из БД
-  if (event.persistent) {
-    const dbEvent = await timeEventRepository.getById(eventId);
-    if (dbEvent && dbEvent.remaining_time) {
-      event.executeAt = nowRounded + dbEvent.remaining_time;
+  // Логика возобновления
+  if (event.type === "cron" && event.startAt && event.interval) {
+    // Для Cron пересчитываем следующее время выполнения по сетке
+    event.executeAt = calculateNextCronTime(event.startAt, event.interval, nowRounded);
+  } else {
+    // Для Once восстанавливаем по remaining_time из БД или памяти
+    if (event.persistent) {
+      const dbEvent = await timeEventRepository.getById(eventId);
+      if (dbEvent && dbEvent.remaining_time) {
+        event.executeAt = nowRounded + dbEvent.remaining_time;
+      }
+    } else if (event.executeAt) {
+      // Если in-memory пауза (маловероятно, но для полноты)
+      // Тут сложнее, так как remaining не храним в памяти явно, считаем, что восстанавливаем "как есть" или по DB
+      // Упрощение: для in-memory просто сдвигаем на прошедшее время (не реализовано детально без поля pausedAt в памяти)
     }
   }
 
@@ -580,11 +727,7 @@ export async function resumeEvent(eventId: string): Promise<boolean> {
 
   // Обновляем bucket
   if (event.executeAt) {
-    const bucket = Math.floor(event.executeAt / BUCKET_SIZE);
-    if (!eventBuckets.has(bucket)) {
-      eventBuckets.set(bucket, new Set());
-    }
-    eventBuckets.get(bucket)!.add(eventId);
+    addToBucket(event.executeAt, eventId);
   }
 
   if (event.persistent) {
@@ -604,10 +747,12 @@ export async function resumeEvent(eventId: string): Promise<boolean> {
  */
 export function getTimeManagerStats(): any {
   const pausedCount = Array.from(events.values()).filter((e) => e.status === "paused").length;
+  const cronCount = Array.from(events.values()).filter((e) => e.type === "cron").length;
 
   return {
     periodicEvents: periodicEvents.size,
-    onceEvents: events.size,
+    bucketEvents: events.size,
+    cronEvents: cronCount,
     pausedEvents: pausedCount,
     buckets: eventBuckets.size,
   };
@@ -625,22 +770,28 @@ export async function getPlayerEvents(playerId: string): Promise<any[]> {
       playerEvents.push({
         id: event.id,
         name: event.name,
+        type: event.type,
         status: event.status,
         executeAt: event.executeAt,
+        interval: event.interval,
         remainingTime: event.executeAt ? Math.max(0, event.executeAt - nowRounded) : null,
         metadata: event.metadata,
       });
     }
   }
 
+  // Догружаем из БД, если вдруг чего-то нет в памяти (например, paused events, которые могли быть выгружены)
+  // В текущей реализации все загружено, но оставим для надежности
   const dbEvents = await timeEventRepository.getByPlayerId(playerId);
   for (const dbEvent of dbEvents) {
     if (!playerEvents.find((e) => e.id === dbEvent.id)) {
       playerEvents.push({
         id: dbEvent.id,
         name: dbEvent.name,
+        type: dbEvent.type,
         status: dbEvent.status,
         executeAt: dbEvent.execute_at,
+        interval: dbEvent.interval,
         remainingTime: dbEvent.remaining_time,
         metadata: dbEvent.metadata,
       });
