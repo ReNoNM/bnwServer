@@ -189,35 +189,15 @@ async function handleCreateTestTask(ws: WebSocket, data: any): Promise<void> {
 
     const { sendToUser } = require("../../network/socketHandler");
 
-    // const eventId = registerOnceEvent({
-    //   name: "testTask",
-    //   delayInSeconds: delay,
-    //   playerId: playerData.id,
-    //   action: () => {
-    //     sendToUser(playerData.id, {
-    //       action: "time/testTaskComplete",
-    //       data: { message },
-    //     });
-    //   },
-    //   persistent: true,
-    //   metadata: {
-    //     actionType: "testTask",
-    //     message,
-    //   },
-    // });
-    const startAt = new Date();
-    startAt.setMinutes(startAt.getMinutes() + 1);
-    const eventId = registerCronEvent({
-      name: "testCronTask",
-      startAt: startAt,
-      interval: 5, // секунды
+    const eventId = registerOnceEvent({
+      name: "testTask",
+      delayInSeconds: delay,
       playerId: playerData.id,
       action: () => {
         sendToUser(playerData.id, {
-          action: "time/testCronTaskComplete",
-          data: { message, timestamp: new Date() },
+          action: "time/testTaskComplete",
+          data: { message },
         });
-        log(`Cron задача сработала для ${playerData.username}`);
       },
       persistent: true,
       metadata: {
@@ -225,6 +205,26 @@ async function handleCreateTestTask(ws: WebSocket, data: any): Promise<void> {
         message,
       },
     });
+    // const startAt = new Date();
+    // startAt.setMinutes(startAt.getMinutes() + 1);
+    // const eventId = registerCronEvent({
+    //   name: "testCronTask",
+    //   startAt: startAt,
+    //   interval: 5, // секунды
+    //   playerId: playerData.id,
+    //   action: () => {
+    //     sendToUser(playerData.id, {
+    //       action: "time/testCronTaskComplete",
+    //       data: { message, timestamp: new Date() },
+    //     });
+    //     log(`Cron задача сработала для ${playerData.username}`);
+    //   },
+    //   persistent: true,
+    //   metadata: {
+    //     actionType: "testTask",
+    //     message,
+    //   },
+    // });
 
     sendSuccess(ws, "time/createTestTask", {
       message: `Задача создана, выполнится через ${delay} секунд`,

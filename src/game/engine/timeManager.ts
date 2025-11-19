@@ -748,9 +748,11 @@ export async function resumeEvent(eventId: string): Promise<boolean> {
 export function getTimeManagerStats(): any {
   const pausedCount = Array.from(events.values()).filter((e) => e.status === "paused").length;
   const cronCount = Array.from(events.values()).filter((e) => e.type === "cron").length;
+  const onceCount = Array.from(events.values()).filter((e) => e.type === "once").length;
 
   return {
     periodicEvents: periodicEvents.size,
+    onceCount: onceCount,
     bucketEvents: events.size,
     cronEvents: cronCount,
     pausedEvents: pausedCount,
