@@ -4,7 +4,7 @@ import { startServer } from "../network/websocketServer";
 import { log, error as logError } from "../utils/logger";
 import { initializeDatabase } from "../db";
 import { initializeTimeManager, stopTimeManager } from "../game/engine/timeManager";
-import { initializeGameCycle, stopGameCycle } from "../game/engine/gameCycleManager";
+import { initializeGameCycle } from "../game/engine/gameEventSystem";
 
 // Определяем оптимальное количество рабочих процессов
 const determineWorkerCount = (): number => {
@@ -137,14 +137,12 @@ export function startCluster(): void {
       // Корректная остановка при завершении процесса
       process.on("SIGTERM", async () => {
         log("Worker: Получен SIGTERM, остановка...");
-        await stopGameCycle();
         await stopTimeManager();
         process.exit(0);
       });
 
       process.on("SIGINT", async () => {
         log("Worker: Получен SIGINT, остановка...");
-        await stopGameCycle();
         await stopTimeManager();
         process.exit(0);
       });

@@ -1,6 +1,7 @@
 import { db } from "../connection";
 import { TimeEvent, TimeEventDTO } from "../models/timeEvent";
 import { log, error as logError } from "../../utils/logger";
+import { sql } from "kysely";
 
 /**
  * Создать новое событие или обновить существующее (upsert для persistent событий)
@@ -221,7 +222,7 @@ export async function getById(eventId: string): Promise<TimeEvent | null> {
     const result = await db.selectFrom("time_events").selectAll().where("id", "=", eventId).executeTakeFirst();
 
     if (result) {
-      result.metadata = JSON.parse((result.metadata as any) || "{}");
+      result.metadata = result.metadata || {};
     }
 
     return result as TimeEvent | null;
@@ -305,6 +306,34 @@ export async function deleteById(eventId: string): Promise<boolean> {
     return Number(result.numDeletedRows) > 0;
   } catch (err) {
     logError(`Ошибка удаления события: ${err}`);
+    return false;
+  }
+}
+
+/**
+ * Пакетное обновление времени выполнения событий (Оптимизированное)
+ * Использует конструкцию UPDATE ... FROM (VALUES ...)
+ */
+export async function batchUpdateExecuteTime(updates: { id: string; executeAt: Date }[]): Promise<boolean> {
+  if (updates.length === 0) return true;
+
+  try {
+    // Формируем массив значений для SQL запроса
+    // Kysely позволяет выполнять raw sql для сложных оптимизаций
+    const values = updates.map((u) => sql`(${u.id}, ${u.executeAt})`);
+
+    await sql`
+      UPDATE time_events as t
+      SET 
+        execute_at = v.execute_at::timestamp with time zone,
+        updated_at = NOW()
+      FROM (VALUES ${sql.join(values)}) as v(id, execute_at)
+      WHERE t.id = v.id
+    `.execute(db);
+
+    return true;
+  } catch (err) {
+    logError(`Ошибка пакетного обновления времени: ${err}`);
     return false;
   }
 }

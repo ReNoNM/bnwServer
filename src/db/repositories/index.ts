@@ -6,6 +6,7 @@ import * as tokenRepository from "./tokenRepository";
 import * as worldRepository from "./worldRepository";
 import * as buildingRepository from "./buildingRepository";
 import * as mapVisibilityRepository from "./mapVisibilityRepository";
+import * as timeEventRepository from "./timeEventRepository";
 
 export {
   spawnPointsOfferRepository,
@@ -16,4 +17,5 @@ export {
   mapRepository,
   buildingRepository,
   mapVisibilityRepository,
+  timeEventRepository,
 };
