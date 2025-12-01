@@ -29,6 +29,7 @@ export interface Buildings {
   created_at: Generated<Timestamp | null>;
   data: Generated<Json | null>;
   id: Generated<string>;
+  inventory_id: string | null;
   level: number;
   map_cell_id: string;
   owner_player_id: string;
@@ -46,12 +47,30 @@ export interface ChatMessages {
   type: string;
 }
 
+export interface Containers {
+  capacity: number;
+  created_at: Generated<Timestamp | null>;
+  id: Generated<string>;
+  max_weight: number | null;
+  type: Generated<string | null>;
+}
+
 export interface GameSettings {
   calendar: Json;
   created_at: Generated<Timestamp | null>;
   date_state: Json;
   id: string;
   updated_at: Generated<Timestamp | null>;
+}
+
+export interface InventoryItems {
+  container_id: string;
+  created_at: Generated<Timestamp | null>;
+  id: Generated<string>;
+  item_type: string;
+  metadata: Generated<Json | null>;
+  quantity: number;
+  slot_index: number;
 }
 
 export interface Map {
@@ -144,7 +163,9 @@ export interface Worlds {
 export interface DB {
   buildings: Buildings;
   chat_messages: ChatMessages;
+  containers: Containers;
   game_settings: GameSettings;
+  inventory_items: InventoryItems;
   map: Map;
   map_visibility: MapVisibility;
   players: Players;

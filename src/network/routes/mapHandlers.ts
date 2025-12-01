@@ -14,8 +14,10 @@ import {
   GetWorldMapPayload,
   getWolrdMapPayloadSchema,
 } from "../middleware/validation";
-import { deflateSync } from "zlib";
+import { deflate } from "zlib";
+import { promisify } from "util";
 import { MapTileWithVisibility } from "../../db/models/mapTile";
+const deflateAsync = promisify(deflate);
 
 // Обработчик получения области карты
 async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
@@ -86,6 +88,8 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
       }
     }
     log(`Отправлена область карты ${worldId}: (${clampedStartX},${clampedStartY}) - (${clampedEndX},${clampedEndY}), ${regionData.length} тайлов`);
+    const buffer = Buffer.from(JSON.stringify(regionData));
+    const compressedBuffer = await deflateAsync(buffer);
 
     sendSuccess(ws, "map/getRegion", {
       worldId,
@@ -93,12 +97,12 @@ async function handleGetMapRegion(ws: WebSocket, data: any): Promise<void> {
       startY: clampedStartY,
       endX: clampedEndX,
       endY: clampedEndY,
-      tiles: deflateSync(Buffer.from(JSON.stringify(regionData))).toString("base64"),
+      tiles: compressedBuffer.toString("base64"),
       totalTiles: regionData.length,
     });
 
     if (regionData.length) {
-      const tilesWithBuild = regionData.filter((item) => !!item.buildingId).map((item) => item.id);
+      const tilesWithBuild = regionData.filter((item: any) => !!item.buildingId).map((item) => item.id);
       const buildings = await buildingRepository.getByMapCellIds(tilesWithBuild);
       if (buildings.length) {
         sendSuccess(ws, "building/getBuildings", {
@@ -319,7 +323,9 @@ async function handleLoadWorldMap(ws: WebSocket, data: any): Promise<void> {
         stats[key].count = 1;
       }
     });
-    const compressedMap = deflateSync(Buffer.from(JSON.stringify(mapGrid))).toString("base64");
+    const buffer = Buffer.from(JSON.stringify(mapGrid));
+    const compressedBuffer = await deflateAsync(buffer);
+    const compressedMap = compressedBuffer.toString("base64");
     log(`Загружена карта мира ${world.name}: ${mapTiles.length} тайлов`);
 
     sendSuccess(ws, "map/getWorldMap", {

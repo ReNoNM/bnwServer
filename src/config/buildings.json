@@ -6,7 +6,8 @@
     "shortDescription": "Короткое описание",
     "descriptionBonus": {
       "1": ["Вмещает 5 пешек до 4 стадии", "Дает 5 внеш пешек", "Хранилище 12 ячеек", "Дает влияние в радиусе 1 клетки"]
-    }
+    },
+    "inventorySlots": 12
   },
   "miningPost": {
     "numeric": 2,
@@ -15,6 +16,7 @@
     "shortDescription": "Короткое описание",
     "descriptionBonus": {
       "1": ["Добыча ресов"]
-    }
+    },
+    "inventorySlots": 8
   }
 }

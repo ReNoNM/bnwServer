@@ -9,6 +9,7 @@ export interface Building {
   type: string;
   name: string;
   descriptionBonus: BuildingBonus;
+  inventorySlots: number;
 }
 
 export interface BuildingsConfig {

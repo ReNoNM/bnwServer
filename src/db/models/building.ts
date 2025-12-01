@@ -5,6 +5,7 @@ export interface Building {
   type: string;
   level: number;
   data?: Record<string, any>;
+  inventoryId?: string | null;
   createdAt?: Date;
   updatedAt?: Date;
 }

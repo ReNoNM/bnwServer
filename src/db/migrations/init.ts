@@ -21,6 +21,17 @@ interface TableDefinition {
 // Определение всех таблиц и их колонок
 const tables: TableDefinition[] = [
   {
+    name: "containers",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "capacity", type: "INTEGER", constraints: "NOT NULL DEFAULT 20" },
+      { name: "type", type: "VARCHAR(50)", defaultValue: "'default'" },
+      { name: "max_weight", type: "INTEGER", nullable: true },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [],
+  },
+  {
     name: "players",
     columns: [
       { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
@@ -87,8 +98,8 @@ const tables: TableDefinition[] = [
       { name: "world_type", type: "VARCHAR(50)", constraints: "NOT NULL DEFAULT 'standard'" },
       { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
-      { name: "players", type: "UUID[]", defaultValue: "'{}'" }, // пустой массив UUID
-      { name: "is_open", type: "BOOLEAN", defaultValue: "true" }, // открыто по умолчанию
+      { name: "players", type: "UUID[]", defaultValue: "'{}'" },
+      { name: "is_open", type: "BOOLEAN", defaultValue: "true" },
       { name: "settings", type: "JSONB", defaultValue: "'{}'::jsonb" },
     ],
     indexes: [
@@ -125,6 +136,25 @@ const tables: TableDefinition[] = [
       { name: "idx_map_building_id", columns: "building_id" },
     ],
   },
+  // 3. Таблица предметов инвентаря
+  {
+    name: "inventory_items",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "container_id", type: "UUID", constraints: "NOT NULL REFERENCES containers(id) ON DELETE CASCADE" },
+      { name: "item_type", type: "VARCHAR(50)", constraints: "NOT NULL" },
+      { name: "quantity", type: "INTEGER", constraints: "NOT NULL DEFAULT 1 CHECK (quantity > 0)" },
+      { name: "slot_index", type: "INTEGER", constraints: "NOT NULL" },
+      { name: "metadata", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [
+      // Уникальный индекс гарантирует, что в одном слоте контейнера только один предмет
+      { name: "idx_inventory_items_slot", columns: ["container_id", "slot_index"], unique: true },
+      { name: "idx_inventory_items_container", columns: "container_id" },
+      { name: "idx_inventory_items_item_type", columns: "item_type" },
+    ],
+  },
   {
     name: "buildings",
     columns: [
@@ -136,11 +166,13 @@ const tables: TableDefinition[] = [
       { name: "data", type: "JSONB", defaultValue: "'{}'::jsonb" },
       { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "inventory_id", type: "UUID", nullable: true, constraints: "REFERENCES containers(id) ON DELETE SET NULL" },
     ],
     indexes: [
-      { name: "idx_buildings_map_cell", columns: "map_cell_id", unique: true }, // одно здание на клетку
+      { name: "idx_buildings_map_cell", columns: "map_cell_id", unique: true },
       { name: "idx_buildings_owner", columns: "owner_player_id" },
       { name: "idx_buildings_type", columns: "type" },
+      { name: "idx_buildings_inventory", columns: "inventory_id" },
     ],
   },
   {
@@ -149,7 +181,11 @@ const tables: TableDefinition[] = [
       { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
       { name: "map_cell_id", type: "UUID", constraints: "NOT NULL REFERENCES map(id) ON DELETE CASCADE" },
       { name: "player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
-      { name: "status", type: "VARCHAR(20)", constraints: "NOT NULL CHECK (status IN ('notVisible', 'visible','scouted','visited'))" },
+      {
+        name: "status",
+        type: "VARCHAR(20)",
+        constraints: "NOT NULL CHECK (status IN ('notVisible', 'visible','scouted','visited'))",
+      },
       { name: "first_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "last_seen_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
     ],
@@ -165,7 +201,7 @@ const tables: TableDefinition[] = [
       { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
       { name: "player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
       { name: "world_id", type: "UUID", constraints: "NOT NULL REFERENCES worlds(id) ON DELETE CASCADE" },
-      { name: "points", type: "JSONB", constraints: "NOT NULL" }, // [{x:number,y:number},...]
+      { name: "points", type: "JSONB", constraints: "NOT NULL" },
       { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "consumed", type: "BOOLEAN", defaultValue: "false" },
     ],
@@ -186,7 +222,7 @@ const tables: TableDefinition[] = [
       { name: "world_id", type: "UUID", nullable: true, constraints: "REFERENCES worlds(id) ON DELETE CASCADE" },
       { name: "execute_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
       { name: "start_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
-      { name: "interval", type: "INTEGER", nullable: true }, // секунд для периодических событий
+      { name: "interval", type: "INTEGER", nullable: true },
       { name: "last_execution", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
       {
         name: "status",
@@ -194,7 +230,7 @@ const tables: TableDefinition[] = [
         constraints: "NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed', 'cancelled'))",
       },
       { name: "paused_at", type: "TIMESTAMP WITH TIME ZONE", nullable: true },
-      { name: "remaining_time", type: "BIGINT", nullable: true }, // миллисекунд до выполнения на момент паузы
+      { name: "remaining_time", type: "BIGINT", nullable: true },
       { name: "metadata", type: "JSONB", defaultValue: "'{}'::jsonb" },
       { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
       { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
@@ -258,7 +294,12 @@ export async function initDatabase(): Promise<void> {
             })
             .join(", ");
 
-          const createTableQuery = `CREATE TABLE ${table.name} (${columnDefinitions})`;
+          let tableConstraints = "";
+          if (table.constraints && table.constraints.length > 0) {
+            tableConstraints = `, ${table.constraints.join(", ")}`;
+          }
+
+          const createTableQuery = `CREATE TABLE ${table.name} (${columnDefinitions}${tableConstraints})`;
           await sql`${sql.raw(createTableQuery)}`.execute(trx);
 
           log(`Таблица ${table.name} успешно создана`);
@@ -285,7 +326,7 @@ export async function initDatabase(): Promise<void> {
                 alterQuery += ` DEFAULT ${column.defaultValue}`;
               }
 
-              if (column.constraints && !column.constraints.includes("PRIMARY KEY") && !column.constraints.includes("REFERENCES")) {
+              if (column.constraints && !column.constraints.includes("PRIMARY KEY")) {
                 alterQuery += ` ${column.constraints}`;
               }
 

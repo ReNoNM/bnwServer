@@ -6,9 +6,20 @@ import { handleError } from "../../utils/errorHandler";
 import { playerRepository } from "../../db";
 import { generateMap } from "../../utils/mapGenerator";
 import { MapTile } from "../../db/models/mapTile";
-import { spawnPointsOfferRepository, mapRepository, worldRepository, mapVisibilityRepository, buildingRepository } from "../../db/repositories";
+import {
+  spawnPointsOfferRepository,
+  mapRepository,
+  worldRepository,
+  mapVisibilityRepository,
+  buildingRepository,
+  inventoryRepository,
+} from "../../db/repositories";
 import { ChoosePointWorldPayload, choosePointWorldPayloadSchema, validateMessage } from "../middleware/validation";
-import { deflateSync } from "zlib";
+import buildingsConfig from "../../config/buildings";
+import { deflate } from "zlib";
+import { promisify } from "util";
+
+const deflateAsync = promisify(deflate);
 
 export function registerPlayerHandlers(): void {
   registerHandler("player", "searchWorld", handleSearchWorld);
@@ -453,8 +464,11 @@ async function handleGetStartedMap(ws: WebSocket): Promise<void> {
       const cells = await mapRepository.getRegion(world.id, item.x - 1, item.y - 1, item.x + 1, item.y + 1);
       tiles.push(...cells.map((item) => ({ ...item, status: "visible" })));
     }
+    const mapBuffer = Buffer.from(JSON.stringify(tiles));
+    const compressedMapBuffer = await deflateAsync(mapBuffer);
+
     sendSuccess(ws, "player/getStartedMap", {
-      tiles: deflateSync(Buffer.from(JSON.stringify(tiles))).toString("base64"),
+      tiles: compressedMapBuffer.toString("base64"),
     });
   } catch (error) {
     handleError(error as Error, "player.getStartedMap");
@@ -516,11 +530,22 @@ async function handleChoosePointWorld(ws: WebSocket, data: any): Promise<void> {
       }
 
       // 2. Создаем здание mainhall
+      // --- НОВАЯ ЛОГИКА ---
+      const mainHallConfig = buildingsConfig["mainhall"];
+      let inventoryId: string | null = null;
+
+      if (mainHallConfig && mainHallConfig.inventorySlots) {
+        const container = await inventoryRepository.createContainer(mainHallConfig.inventorySlots, "building");
+        if (container) inventoryId = container.id;
+      }
+      // --------------------
+
       const building = await buildingRepository.create({
         mapCellId: mapTile.id,
         ownerPlayerId: playerId,
         type: "mainhall",
         level: 1,
+        inventoryId: inventoryId,
       });
 
       if (!building) {

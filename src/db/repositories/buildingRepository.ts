@@ -8,6 +8,7 @@ export async function create(params: {
   type: string;
   level?: number;
   data?: Record<string, any>;
+  inventoryId?: string | null;
 }): Promise<Building | null> {
   try {
     const result = await db
@@ -18,6 +19,7 @@ export async function create(params: {
         type: params.type,
         level: params.level || 1,
         data: params.data || {},
+        inventory_id: params.inventoryId || null,
       })
       .returning([
         "id",
@@ -28,6 +30,7 @@ export async function create(params: {
         "data",
         "created_at as createdAt",
         "updated_at as updatedAt",
+        "inventory_id as inventoryId",
       ])
       .executeTakeFirst();
 
@@ -51,6 +54,7 @@ export async function getByMapCellId(mapCellId: string): Promise<Building | null
         "type",
         "level",
         "data",
+        "inventory_id as inventoryId",
         "created_at as createdAt",
         "updated_at as updatedAt",
       ])
@@ -78,6 +82,7 @@ export async function getByMapCellIds(mapCellIds: string[]): Promise<Building[]>
           "type",
           "level",
           "data",
+          "inventory_id as inventoryId",
           "created_at as createdAt",
           "updated_at as updatedAt",
         ])
@@ -105,6 +110,7 @@ export async function getByOwnerPlayerId(ownerPlayerId: string): Promise<Buildin
         "type",
         "level",
         "data",
+        "inventory_id as inventoryId",
         "created_at as createdAt",
         "updated_at as updatedAt",
       ])
@@ -129,6 +135,7 @@ export async function getByBuildId(buildId: string): Promise<Building[]> {
         "type",
         "level",
         "data",
+        "inventory_id as inventoryId",
         "created_at as createdAt",
         "updated_at as updatedAt",
       ])
@@ -139,5 +146,31 @@ export async function getByBuildId(buildId: string): Promise<Building[]> {
   } catch (err) {
     logError(`Ошибка получения здания по id: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
     return [];
+  }
+}
+
+export async function getByInventoryIdAndOwner(inventoryId: string, ownerPlayerId: string): Promise<Building | null> {
+  try {
+    const result = await db
+      .selectFrom("buildings")
+      .select([
+        "id",
+        "map_cell_id as mapCellId",
+        "owner_player_id as ownerPlayerId",
+        "type",
+        "level",
+        "data",
+        "inventory_id as inventoryId",
+        "created_at as createdAt",
+        "updated_at as updatedAt",
+      ])
+      .where("inventory_id", "=", inventoryId)
+      .where("owner_player_id", "=", ownerPlayerId)
+      .executeTakeFirst();
+
+    return (result as Building) || null;
+  } catch (err) {
+    logError(`buildingRepository.getByInventoryIdAndOwner error: ${err instanceof Error ? err.message : "unknown"}`);
+    return null;
   }
 }

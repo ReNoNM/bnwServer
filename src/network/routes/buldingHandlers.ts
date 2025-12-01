@@ -2,10 +2,10 @@ import { WebSocket } from "ws";
 import { registerHandler } from "../messageDispatcher";
 import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUtils";
 import { handleError } from "../../utils/errorHandler";
-import { mapRepository, buildingRepository } from "../../db/repositories";
+import { mapRepository, buildingRepository, inventoryRepository } from "../../db/repositories";
 
 import { validateMessage } from "../middleware/validation";
-import { BuildingCreatePayload, buildingCreatePayloadSchema } from "../middleware/validation/buildint";
+import { BuildingCreatePayload, buildingCreatePayloadSchema } from "../middleware/validation/building";
 import buildingsConfig from "../../config/buildings";
 
 async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
@@ -23,7 +23,8 @@ async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
     }
 
     const { buildingId, cellId } = validation.data;
-    if (!buildingsConfig[buildingId]) {
+    const buildingConf = buildingsConfig[buildingId];
+    if (!buildingConf) {
       sendError(ws, "building/create", "Здание не найдено");
       return;
     }
@@ -39,11 +40,23 @@ async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
+    // --- НОВАЯ ЛОГИКА: СОЗДАНИЕ ИНВЕНТАРЯ ---
+    let newInventoryId: string | null = null;
+
+    if (buildingConf.inventorySlots && buildingConf.inventorySlots > 0) {
+      const container = await inventoryRepository.createContainer(buildingConf.inventorySlots, "building");
+      if (container) {
+        newInventoryId = container.id;
+      }
+    }
+    // ----------------------------------------
+
     const building = await buildingRepository.create({
       mapCellId: cellId,
       ownerPlayerId: playerId,
       level: 1,
       type: buildingsConfig[buildingId].type,
+      inventoryId: newInventoryId,
     });
     const returnCell = await mapRepository.updateTileById(cellId, { buildingId: building?.id });
     if (building?.id) {
