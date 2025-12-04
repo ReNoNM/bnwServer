@@ -5,7 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import gameSettings from "../../config/gameSettings";
 import { sendToUser } from "../../network/socketHandler";
 import { handleDayChange } from "./gameEventSystem";
-
+import { processMiningCycle } from "./miningEngine";
 // ==========================================
 // ХЕЛПЕРЫ ВРЕМЕНИ
 // ==========================================
@@ -268,6 +268,19 @@ async function executeRestoredEvent(dbEvent: any): Promise<void> {
     switch (metadata.actionType) {
       case "gameCycleDayChange":
         handleDayChange();
+        break;
+      case "mining":
+        if (metadata.buildingId && metadata.resourceKey) {
+          // Запускаем обработку цикла (это запустит выдачу ресурсов и создаст следующий таймер)
+          await processMiningCycle(metadata.buildingId, metadata.resourceKey);
+
+          // Для дебага (можно убрать в продакшене)
+          if (process.env.NODE_ENV === "development") {
+            log(`[TimeManager] Восстановлен цикл добычи: ${metadata.buildingId} (${metadata.resourceKey})`);
+          }
+        } else {
+          logError(`[TimeManager] Ошибка восстановления mining события ${dbEvent.id}: нет данных`);
+        }
         break;
       case "testTask":
         sendToUser(dbEvent.player_id, {

@@ -29,20 +29,27 @@ async function handleGetDate(ws: WebSocket): Promise<void> {
     const date = getCurrentDate();
     const settings = getCalendarSettings();
 
+    // Вычисляем длительность
+    const durationMs = settings.secondsPerDay * 1000;
+
+    // Если сервер только запустился и lastUpdate еще старый,
+    // но таймер тикает, клиент может получить startTime в прошлом.
+    // Это нормально, прогресс бар просто заполнится согласно прошедшему времени.
+
     sendSuccess(ws, "system/getDate", {
       year: date.year,
       month: date.month,
       day: date.day,
-      lastUpdate: date.lastUpdate,
-      nextUpdate: events.get("gameCycleDayChange")?.executeAt,
-      nextDayIn: settings.secondsPerDay,
+
+      // Поля для прогресс-бара в стиле Mining:
+      startTime: date.lastUpdate, // Используем сохраненное время последнего обновления
+      duration: durationMs,
     });
   } catch (error) {
     handleError(error as Error, "system.getDate");
     sendSystemError(ws, "Ошибка при получении даты");
   }
 }
-
 // Регистрация обработчиков системных сообщений
 export function registerSystemHandlers(): void {
   registerHandler("system", "ping", handlePing);

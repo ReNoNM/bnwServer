@@ -13,7 +13,7 @@ let currentDate: CalendarState = {
   lastUpdate: Date.now(),
 };
 
-let calendarSettings: CalendarSettings = {
+export let calendarSettings: CalendarSettings = {
   monthsPerYear: 12,
   daysPerMonth: 30,
   secondsPerDay: 30,
@@ -33,11 +33,34 @@ export async function initializeGameCycle(): Promise<void> {
     if (settings) {
       calendarSettings = settings.calendar;
       currentDate = settings.currentDate;
+
+      const now = Date.now();
+      const durationMs = calendarSettings.secondsPerDay * 1000;
+      const timeSinceLastUpdate = now - currentDate.lastUpdate;
+
+      // Если с момента последнего обновления прошло больше времени, чем длится день
+      if (timeSinceLastUpdate >= durationMs) {
+        // Считаем, сколько полных циклов прошло
+        const skippedCycles = Math.floor(timeSinceLastUpdate / durationMs);
+
+        if (skippedCycles > 0) {
+          log(`Обнаружен простой сервера (${skippedCycles} циклов). Синхронизация таймера без изменения даты...`);
+
+          // Просто сдвигаем lastUpdate вперед на количество пропущенных циклов.
+          // Это делает так, что текущий момент (now) оказывается внутри "текущего" цикла.
+          currentDate.lastUpdate += skippedCycles * durationMs;
+
+          // ВАЖНО: Мы НЕ меняем currentDate.day/month/year
+
+          // Сохраняем обновленный timestamp в БД, чтобы клиент получил корректный startTime
+          await gameSettingsRepository.updateCurrentDate(currentDate);
+        }
+      }
+
       log(`Загружены настройки календаря: ${JSON.stringify(calendarSettings)}`);
       log(`Текущая дата: Год ${currentDate.year}, Месяц ${currentDate.month}, День ${currentDate.day}`);
     }
     const gameCycleDayChange = await timeEventRepository.getById("gameCycleDayChange");
-    console.log("🚀 ~ initializeGameCycle ~ gameCycleDayChange:", gameCycleDayChange);
     if (gameCycleDayChange) {
       cycleEventId = gameCycleDayChange.id;
     } else {
@@ -65,6 +88,7 @@ export async function initializeGameCycle(): Promise<void> {
  */
 export async function handleDayChange(): Promise<void> {
   try {
+    // 1. Обновляем дату
     currentDate.day++;
 
     if (currentDate.day > calendarSettings.daysPerMonth) {
@@ -77,17 +101,27 @@ export async function handleDayChange(): Promise<void> {
       }
     }
 
-    currentDate.lastUpdate = Date.now();
+    // 2. Фиксируем момент начала нового дня (startTime)
+    const now = Date.now();
+    currentDate.lastUpdate = now;
+
+    // 3. Вычисляем длительность текущего дня в мс
+    const durationMs = calendarSettings.secondsPerDay * 1000;
+
+    // Сохраняем в БД
     await gameSettingsRepository.updateCurrentDate(currentDate);
+
+    // 4. Отправляем в удобном формате (Start + Duration)
     broadcast({
       action: "system/dateUpdateSuccess",
       data: {
         year: currentDate.year,
         month: currentDate.month,
         day: currentDate.day,
-        timestamp: currentDate.lastUpdate,
-        nextDayIn: calendarSettings.secondsPerDay,
-        executeAt: events.get("gameCycleDayChange")?.executeAt,
+
+        // Поля для прогресс-бара:
+        startTime: now, // Когда этот день начался
+        duration: durationMs, // Сколько он длится
       },
     });
 

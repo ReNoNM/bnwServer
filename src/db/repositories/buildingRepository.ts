@@ -174,3 +174,21 @@ export async function getByInventoryIdAndOwner(inventoryId: string, ownerPlayerI
     return null;
   }
 }
+
+export async function updateData(id: string, data: Record<string, any>): Promise<boolean> {
+  try {
+    const result = await db
+      .updateTable("buildings")
+      .set({
+        data: JSON.stringify(data),
+        updated_at: new Date(),
+      })
+      .where("id", "=", id)
+      .executeTakeFirst();
+
+    return Number(result.numUpdatedRows) > 0;
+  } catch (err) {
+    logError(`Ошибка обновления данных здания: ${err instanceof Error ? err.message : "Неизвестная ошибка"}`);
+    return false;
+  }
+}
