@@ -3,20 +3,36 @@
     "numeric": 1,
     "type": "mainhall",
     "name": "Главный зал",
+    "limit": 1,
     "shortDescription": "Короткое описание",
     "descriptionBonus": {
       "1": ["Вмещает 5 пешек до 4 стадии", "Дает 5 внеш пешек", "Хранилище 12 ячеек", "Дает влияние в радиусе 1 клетки"]
     },
+    "modules": ["storage"],
     "inventorySlots": 12
   },
   "miningPost": {
     "numeric": 2,
     "type": "miningPost",
     "name": "Пост добычи",
+    "limit": -1,
     "shortDescription": "Короткое описание",
     "descriptionBonus": {
       "1": ["Добыча ресов"]
     },
+    "modules": ["storage", "mining"],
     "inventorySlots": 8
+  },
+  "recruitingHall": {
+    "numeric": 6,
+    "type": "recruitingHall",
+    "limit": 1,
+    "name": "Вербовочный зал",
+    "shortDescription": "Короткое описание",
+    "descriptionBonus": {
+      "1": ["Предлагает для найма 5 пешек"]
+    },
+    "modules": ["storage", "recruiting"],
+    "inventorySlots": 3
   }
 }

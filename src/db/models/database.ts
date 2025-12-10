@@ -147,6 +147,19 @@ export interface Tokens {
   user_id: string;
 }
 
+export interface Units {
+  created_at: Generated<Timestamp | null>;
+  data: Generated<Json | null>;
+  id: Generated<string>;
+  inventory_id: string | null;
+  name: string;
+  owner_player_id: string;
+  updated_at: Generated<Timestamp | null>;
+  world_id: string;
+  x: number;
+  y: number;
+}
+
 export interface Worlds {
   created_at: Generated<Timestamp | null>;
   id: Generated<string>;
@@ -172,5 +185,6 @@ export interface DB {
   spawn_points_offers: SpawnPointsOffers;
   time_events: TimeEvents;
   tokens: Tokens;
+  units: Units;
   worlds: Worlds;
 }

@@ -8,6 +8,7 @@ import * as buildingRepository from "./buildingRepository";
 import * as mapVisibilityRepository from "./mapVisibilityRepository";
 import * as timeEventRepository from "./timeEventRepository";
 import * as inventoryRepository from "./inventoryRepository";
+import * as unitRepository from "./unitRepository";
 
 export {
   spawnPointsOfferRepository,
@@ -20,4 +21,5 @@ export {
   mapVisibilityRepository,
   timeEventRepository,
   inventoryRepository,
+  unitRepository,
 };

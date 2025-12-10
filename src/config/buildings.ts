@@ -8,6 +8,7 @@ export interface Building {
   numeric: number;
   type: string;
   name: string;
+  limit: number;
   descriptionBonus: BuildingBonus;
   inventorySlots: number;
 }

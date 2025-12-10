@@ -69,7 +69,7 @@ export async function processMiningCycle(buildingId: string, resourceKey: string
       workers: workers,
       eventId: eventId,
       startTime: Date.now(),
-      baseDuration: durationSeconds * 1000,
+      duration: durationSeconds * 1000,
       savedProgressMs: 0,
       workersBeforePause: 0,
     };
@@ -112,7 +112,7 @@ export async function updateWorkers(buildingId: string, resourceKey: string, new
     workers: 0,
     eventId: null,
     startTime: 0,
-    baseDuration: 0,
+    duration: 0,
     savedProgressMs: 0,
     workersBeforePause: 0,
   };
@@ -144,7 +144,7 @@ export async function updateWorkers(buildingId: string, resourceKey: string, new
     // Если мы работали, нужно добавить текущий прогресс к сохраненному
     if (oldWorkers > 0 && currentState.startTime > 0) {
       const timePassed = now - currentState.startTime;
-      const safeTimePassed = Math.min(timePassed, currentState.baseDuration || currentBaseDurationMs);
+      const safeTimePassed = Math.min(timePassed, currentState.duration || currentBaseDurationMs);
       progressToSave = safeTimePassed;
     }
 
@@ -152,7 +152,7 @@ export async function updateWorkers(buildingId: string, resourceKey: string, new
       workers: 0,
       eventId: null,
       startTime: 0,
-      baseDuration: currentState.baseDuration || currentBaseDurationMs,
+      duration: currentState.duration || currentBaseDurationMs,
       // Сохраняем прогресс и кол-во рабочих для будущего расчета
       savedProgressMs: progressToSave,
       workersBeforePause: oldWorkers > 0 ? oldWorkers : currentState.workersBeforePause || 0,
@@ -179,7 +179,7 @@ export async function updateWorkers(buildingId: string, resourceKey: string, new
   // Б. Изменение на лету (было > 0)
   else if (currentState.startTime > 0) {
     const timePassed = now - currentState.startTime;
-    effectivePassedTime = Math.min(timePassed, currentState.baseDuration || currentBaseDurationMs);
+    effectivePassedTime = Math.min(timePassed, currentState.duration || currentBaseDurationMs);
     workersForCalc = oldWorkers;
   }
 
@@ -218,7 +218,7 @@ export async function updateWorkers(buildingId: string, resourceKey: string, new
     workers: newWorkerCount,
     eventId: newEventId,
     startTime: adjustedStartTime,
-    baseDuration: currentBaseDurationMs,
+    duration: currentBaseDurationMs,
     // Сбрасываем поля паузы, так как процесс пошел
     savedProgressMs: 0,
     workersBeforePause: 0,

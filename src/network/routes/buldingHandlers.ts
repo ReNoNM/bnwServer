@@ -4,10 +4,18 @@ import { sendSuccess, sendError, sendSystemError } from "../../utils/websocketUt
 import { handleError } from "../../utils/errorHandler";
 import { mapRepository, buildingRepository, inventoryRepository } from "../../db/repositories";
 import { validateMessage } from "../middleware/validation";
-import { BuildingCreatePayload, buildingCreatePayloadSchema, GetBuildingPayload, getBuildingPayloadSchema } from "../middleware/validation/building";
+import {
+  BuildingCreatePayload,
+  buildingCreatePayloadSchema,
+  GetBuildingPayload,
+  getBuildingPayloadSchema,
+  RecruitPawnPayload,
+  recruitPawnPayloadSchema,
+} from "../middleware/validation/building";
 import buildingsConfig from "../../config/buildings";
 import { assignWorkersPayloadSchema, AssignWorkersPayload } from "../middleware/validation/building";
 import { updateWorkers } from "../../game/engine/miningEngine";
+import { getRecruitmentState, recruitPawn, refreshRecruitmentOptions } from "../../game/engine/recruitmentEngine";
 
 async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
   try {
@@ -41,6 +49,15 @@ async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
       return;
     }
 
+    if (buildingConf && buildingConf.limit > 0) {
+      const currentCount = await buildingRepository.countByPlayerAndType(playerId, buildingId);
+
+      if (currentCount >= buildingConf.limit) {
+        sendError(ws, "building/create", `Вы не можете построить больше ${buildingConf.limit} зданий типа "${buildingConf.name}"`);
+        return;
+      }
+    }
+
     // --- НОВАЯ ЛОГИКА: СОЗДАНИЕ ИНВЕНТАРЯ ---
     let newInventoryId: string | null = null;
 
@@ -59,7 +76,21 @@ async function buildingCreate(ws: WebSocket, data: any): Promise<void> {
       type: buildingsConfig[buildingId].type,
       inventoryId: newInventoryId,
     });
+
+    if (!building) {
+      sendError(ws, "building/create", "Не удалось создать запись в БД");
+      return;
+    }
+
     const returnCell = await mapRepository.updateTileById(cellId, { buildingId: building?.id });
+
+    if (buildingsConfig[buildingId].type === "recruitingHall") {
+      const recruitmentState = await refreshRecruitmentOptions(building.id);
+
+      if (!building.data) building.data = {};
+      building.data.recruitment = recruitmentState;
+    }
+
     if (building?.id) {
       sendSuccess(ws, "building/create", {
         building: building,
@@ -162,9 +193,82 @@ async function handleGetBuilding(ws: WebSocket, data: any): Promise<void> {
   }
 }
 
+async function handleGetRecruitment(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const { buildingId } = data; // Валидируй схемой getBuildingPayloadSchema, она уже есть
+
+    const state = await getRecruitmentState(buildingId);
+
+    if (!state) {
+      sendError(ws, "building/getRecruitment", "Не удалось получить данные");
+      return;
+    }
+
+    sendSuccess(ws, "building/getRecruitment", {
+      buildingId,
+      state,
+    });
+  } catch (error) {
+    sendSystemError(ws, "Ошибка получения рекрутов");
+  }
+}
+
+/**
+ * Ручное обновление списка
+ */
+async function handleRefreshRecruitment(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const { buildingId } = data;
+
+    // Тут можно добавить проверку прав или списание ресурсов за обновление
+
+    await refreshRecruitmentOptions(buildingId, true);
+    const buildings = await buildingRepository.getByBuildId(buildingId);
+    const building = buildings[0];
+    sendSuccess(ws, "building/refreshRecruitment", {
+      building,
+    });
+  } catch (error) {
+    sendSystemError(ws, "Ошибка обновления списка");
+  }
+}
+
+/**
+ * Нанять пешку
+ */
+async function handleRecruit(ws: WebSocket, data: any): Promise<void> {
+  try {
+    const playerId = (ws as any)?.playerData?.id;
+    const validation = validateMessage<RecruitPawnPayload>(recruitPawnPayloadSchema, data);
+
+    if (!validation.success) {
+      sendError(ws, "building/recruit", "Ошибка валидации");
+      return;
+    }
+
+    const { buildingId, optionId } = validation.data;
+
+    const result = await recruitPawn(buildingId, optionId, playerId);
+
+    sendSuccess(ws, "building/recruit", {
+      success: true,
+      unit: result.unit,
+      state: result.recruitmentState, // Обновленный список (без нанятого)
+    });
+
+    // Опционально: можно отправить обновление карты, чтобы юнит сразу появился
+  } catch (error) {
+    handleError(error as Error, "building.recruit");
+    sendError(ws, "building/recruit", error instanceof Error ? error.message : "Ошибка найма");
+  }
+}
+
 // Регистрация обработчиков карты
 export function registerBuldingHandlers(): void {
   registerHandler("building", "buildingCreate", buildingCreate);
   registerHandler("building", "assignWorkers", handleAssignWorkers);
   registerHandler("building", "getBuilding", handleGetBuilding);
+  registerHandler("building", "getRecruitment", handleGetRecruitment);
+  registerHandler("building", "refreshRecruitment", handleRefreshRecruitment);
+  registerHandler("building", "recruit", handleRecruit);
 }

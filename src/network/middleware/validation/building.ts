@@ -39,3 +39,10 @@ export const getBuildingPayloadSchema = Type.Object({
 export type BuildingCreatePayload = Static<typeof buildingCreatePayloadSchema>;
 export type AssignWorkersPayload = Static<typeof assignWorkersPayloadSchema>;
 export type GetBuildingPayload = Static<typeof getBuildingPayloadSchema>;
+
+export const recruitPawnPayloadSchema = Type.Object({
+  buildingId: Type.String({ minLength: 1 }),
+  optionId: Type.String({ minLength: 1 }),
+});
+
+export type RecruitPawnPayload = Static<typeof recruitPawnPayloadSchema>;

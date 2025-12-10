@@ -7,6 +7,7 @@ import { registerPlayerHandlers } from "./playerHandlers";
 import { registerBuldingHandlers } from "./buldingHandlers";
 import { registerTimeHandlers } from "./timeHandlers";
 import { registerInventoryHandlers } from "./inventoryHandlers";
+import { registerUnitHandlers } from "./unitHandlers";
 
 // Регистрация всех обработчиков маршрутов
 export function registerAllHandlers(): void {
@@ -19,6 +20,7 @@ export function registerAllHandlers(): void {
   registerBuldingHandlers();
   registerTimeHandlers();
   registerInventoryHandlers();
+  registerUnitHandlers();
 
   log("Все обработчики маршрутов зарегистрированы");
 }

@@ -5,3 +5,4 @@ export * from "./system";
 export * from "./map";
 export * from "./player";
 export * from "./inventory";
+export * from "./unit";

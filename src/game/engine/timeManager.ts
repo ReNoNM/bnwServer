@@ -6,6 +6,7 @@ import gameSettings from "../../config/gameSettings";
 import { sendToUser } from "../../network/socketHandler";
 import { handleDayChange } from "./gameEventSystem";
 import { processMiningCycle } from "./miningEngine";
+import { refreshRecruitmentOptions } from "./recruitmentEngine";
 // ==========================================
 // ХЕЛПЕРЫ ВРЕМЕНИ
 // ==========================================
@@ -268,6 +269,17 @@ async function executeRestoredEvent(dbEvent: any): Promise<void> {
     switch (metadata.actionType) {
       case "gameCycleDayChange":
         handleDayChange();
+        break;
+      case "recruitment":
+        if (metadata.buildingId) {
+          // Запускаем обновление (это сгенерит новых и перезапустит таймер)
+          // false означает автоматическое обновление, не ручное
+          await refreshRecruitmentOptions(metadata.buildingId, false);
+
+          if (process.env.NODE_ENV === "development") {
+            log(`[TimeManager] Восстановлен цикл вербовки: ${metadata.buildingId}`);
+          }
+        }
         break;
       case "mining":
         if (metadata.buildingId && metadata.resourceKey) {

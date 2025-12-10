@@ -255,6 +255,31 @@ const tables: TableDefinition[] = [
     ],
     indexes: [],
   },
+  {
+    name: "units",
+    columns: [
+      { name: "id", type: "UUID", constraints: "PRIMARY KEY DEFAULT gen_random_uuid()" },
+      { name: "owner_player_id", type: "UUID", constraints: "NOT NULL REFERENCES players(id) ON DELETE CASCADE" },
+      { name: "world_id", type: "UUID", constraints: "NOT NULL REFERENCES worlds(id) ON DELETE CASCADE" },
+      // Координаты (где стоит юнит)
+      { name: "x", type: "INTEGER", constraints: "NOT NULL" },
+      { name: "y", type: "INTEGER", constraints: "NOT NULL" },
+      // Имя (сгенерированное при найме)
+      { name: "name", type: "VARCHAR(100)", constraints: "NOT NULL" },
+      // Инвентарь (4 слота, создается при найме)
+      { name: "inventory_id", type: "UUID", nullable: true, constraints: "REFERENCES containers(id) ON DELETE SET NULL" },
+      // Метаданные для баффов/дебаффов и прочего
+      { name: "data", type: "JSONB", defaultValue: "'{}'::jsonb" },
+      { name: "created_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+      { name: "updated_at", type: "TIMESTAMP WITH TIME ZONE", defaultValue: "CURRENT_TIMESTAMP" },
+    ],
+    indexes: [
+      { name: "idx_units_owner", columns: "owner_player_id" },
+      // Индекс для быстрого поиска всех юнитов в квадрате карты (для unit/getByRegion)
+      { name: "idx_units_world_location", columns: ["world_id", "x", "y"] },
+      { name: "idx_units_inventory", columns: "inventory_id" },
+    ],
+  },
 ];
 
 // Функция для выполнения начальных миграций базы данных

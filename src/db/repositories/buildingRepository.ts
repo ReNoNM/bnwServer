@@ -192,3 +192,19 @@ export async function updateData(id: string, data: Record<string, any>): Promise
     return false;
   }
 }
+
+export async function countByPlayerAndType(playerId: string, type: string): Promise<number> {
+  try {
+    const result = await db
+      .selectFrom("buildings")
+      .select(({ fn }) => [fn.count("id").as("count")])
+      .where("owner_player_id", "=", playerId)
+      .where("type", "=", type)
+      .executeTakeFirst();
+
+    return Number(result?.count || 0);
+  } catch (err) {
+    logError(`buildingRepository.countByPlayerAndType error: ${err}`);
+    return 0;
+  }
+}
