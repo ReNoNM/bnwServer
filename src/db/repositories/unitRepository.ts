@@ -119,31 +119,37 @@ export async function getByRegion(worldId: string, startX: number, startY: numbe
   }
 }
 
-export async function getByOwner(ownerId: string, worldId: string): Promise<Unit[]> {
+export async function getByOwner(ownerId: string, worldId: string): Promise<any[]> {
+  // Можно заменить Promise<Unit[]> на Promise<any[]> или расширенный тип
   try {
     const results = await db
       .selectFrom("units")
+      .leftJoin("map", (join) => join.onRef("units.world_id", "=", "map.world_id").onRef("units.x", "=", "map.x").onRef("units.y", "=", "map.y"))
       .select([
-        "id",
-        "owner_player_id as ownerPlayerId",
-        "world_id as worldId",
-        "x",
-        "y",
-        "name",
-        "inventory_id as inventoryId",
-        "data",
-        "created_at as createdAt",
-        "updated_at as updatedAt",
+        "units.id",
+        "units.owner_player_id as ownerPlayerId",
+        "units.world_id as worldId",
+        "units.x",
+        "units.y",
+        "units.name",
+        "units.inventory_id as inventoryId",
+        "units.data",
+        "units.created_at as createdAt",
+        "units.updated_at as updatedAt",
+        "map.type as tileType",
+        "map.type_id as tileTypeId",
       ])
-      .where("owner_player_id", "=", ownerId)
-      .where("world_id", "=", worldId)
+      .where("units.owner_player_id", "=", ownerId)
+      .where("units.world_id", "=", worldId)
       .execute();
 
     return results.map((r) => ({
       ...r,
+      tileType: r.tileType || "plain",
+      tileTypeId: r.tileTypeId || 0,
       createdAt: Number(r.createdAt),
       updatedAt: Number(r.updatedAt),
-    })) as Unit[];
+    }));
   } catch (err) {
     logError(`unitRepository.getByOwner error: ${err}`);
     return [];

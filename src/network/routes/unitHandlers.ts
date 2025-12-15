@@ -49,7 +49,6 @@ async function handleGetMyUnits(ws: WebSocket, data: any): Promise<void> {
       sendError(ws, "unit/getMyUnits", "Неавторизовано");
       return;
     }
-
     const validation = validateMessage<GetMyUnitsPayload>(getMyUnitsPayloadSchema, data);
     if (!validation.success) {
       sendError(ws, "unit/getMyUnits", "Ошибка валидации");
